@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src/main/java"/>
+	<classpathentry exported="true" kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry exported="true" kind="con" path="org.springsource.ide.eclipse.gradle.classpathcontainer"/>
+	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.web.container"/>
+	<classpathentry kind="lib" path="lib/commons-codec-1.4.jar"/>
+	<classpathentry kind="lib" path="lib/commons-httpclient-3.1.jar"/>
+	<classpathentry kind="lib" path="lib/commons-io-2.4.jar"/>
+	<classpathentry kind="lib" path="lib/commons-logging-1.1.1.jar"/>
+	<classpathentry kind="lib" path="lib/graphdb-lite-6.0.jar"/>
+	<classpathentry kind="lib" path="lib/log4j-1.2.6.jar"/>
+	<classpathentry kind="lib" path="lib/lubm.jar"/>
+	<classpathentry kind="lib" path="lib/openrdf-sesame-2.7.8-onejar.jar"/>
+	<classpathentry kind="lib" path="lib/sesame-http-client-2.7.8.jar"/>
+	<classpathentry kind="lib" path="lib/slf4j-api-1.5.0.jar"/>
+	<classpathentry kind="lib" path="lib/slf4j-jdk14-1.5.0.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/Custom"/>
+	<classpathentry kind="lib" path="lib/virtjdbc4_1.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/httpcore-4.3.2.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/java-json.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/httpclient-4.3.3.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/jena-core-2.11.1.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/jena-arq-2.11.1.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/jena-iri-1.0.1.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/xercesImpl-2.11.0.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/xml-apis-1.4.01.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
