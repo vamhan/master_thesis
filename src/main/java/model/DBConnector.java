@@ -26,11 +26,10 @@ import virtuoso.jdbc4.*;
 
 public class DBConnector {
 
+	static final String urlDB = "jdbc:virtuoso://localhost:1111";
 	static final String username = "dba";
 	static final String password = "dba";
 	static final String database = "";
-	static final String urlDB = "jdbc:virtuoso://localhost:1111/UID=" + username + "/PWD=" + password + "/"
-			+ "CHARSET=<character set>/";
 
 	Connection conn;
 
@@ -47,7 +46,7 @@ public class DBConnector {
 		try {
 			if (conn == null || conn.isClosed()) {
 				Class.forName("virtuoso.jdbc4.Driver");
-				conn = DriverManager.getConnection(urlDB);
+				conn = DriverManager.getConnection(urlDB, username, password);
 				System.out.println("DB connect success");
 			}
 		} catch (ClassNotFoundException e) {
@@ -166,11 +165,11 @@ public class DBConnector {
 							}
 						} else if (o instanceof VirtuosoRdfBox) {
 							VirtuosoRdfBox rb = (VirtuosoRdfBox) o;
-							value = rb.rb_box + " lang=" + rb.getLang() + " type=" + rs.getString("datatype");
+							value = rb.rb_box + " lang=" + rb.getLang() + " type=" + (rs.getString("datatype") == null ? "http://www.w3.org/2001/XMLSchema#string" : rs.getString("datatype"));
 						} else if (stmt.getResultSet().wasNull()) {
 							value = "NULL";
 						} else {
-							value = s + " lang=null type=" + rs.getString("datatype");
+							value = s + " lang=null type=" + (rs.getString("datatype") == null ? "http://www.w3.org/2001/XMLSchema#string" : rs.getString("datatype"));
 						}
 						tuple.put(data.getColumnName(i), value);
 					}

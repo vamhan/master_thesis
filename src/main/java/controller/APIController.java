@@ -343,7 +343,7 @@ public class APIController {
 				}
 				
 				// check level members
-				if (level.equals("model")) {
+				/*if (level.equals("model")) {
 					String query2 = "SPARQL " + QUERY_PREFIX + prefix
 							+ "SELECT ?instance from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
 							+ "?type rdfs:subClassOf* rdfs:Resource ."
@@ -351,7 +351,7 @@ public class APIController {
 						+ "}";
 					List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
 					for (Map<String, String> map : tuples) {
-						if (getPrefix(QUERY_PREFIX + prefix, map.get("instance")).equals(getPrefix(QUERY_PREFIX + prefix, triple.getSubject())) || getPrefix(QUERY_PREFIX + prefix, map.get("instance")).equals(getPrefix(QUERY_PREFIX + prefix, triple.getObject()))) {
+						if (map.get("instance").equals(getFullURI(QUERY_PREFIX + prefix, triple.getSubject())) || map.get("instance").equals(getFullURI(QUERY_PREFIX + prefix, triple.getObject()))) {
 							status = HttpStatus.BAD_REQUEST;
 							message = "Some inserted triples are not in the model level!";
 							return new ResponseEntity<String>(message, status);
@@ -365,13 +365,13 @@ public class APIController {
 					
 					List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
 					for (Map<String, String> map : tuples) {
-						if (getPrefix(QUERY_PREFIX + prefix, triple.getPredicate()).equals("rdf:type")) {
-							if (getPrefix(QUERY_PREFIX + prefix, map.get("class")).equals(getPrefix(QUERY_PREFIX + prefix, triple.getSubject()))) {
+						if (triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) {
+							if (map.get("class").equals(getFullURI(QUERY_PREFIX + prefix, triple.getSubject()))) {
 								status = HttpStatus.BAD_REQUEST;
 								message = "Some inserted triples are not in the instance level!";
 								return new ResponseEntity<String>(message, status);
 							}
-						} else if (getPrefix(QUERY_PREFIX + prefix, map.get("class")).equals(getPrefix(QUERY_PREFIX + prefix, triple.getSubject())) || getPrefix(QUERY_PREFIX + prefix, map.get("class")).equals(getPrefix(QUERY_PREFIX + prefix, triple.getObject()))) {
+						} else if (map.get("class").equals(getFullURI(QUERY_PREFIX + prefix, triple.getSubject())) || map.get("class").equals(getFullURI(QUERY_PREFIX + prefix, triple.getObject()))) {
 							status = HttpStatus.BAD_REQUEST;
 							message = "Some inserted triples are not in the instance level!";
 							return new ResponseEntity<String>(message, status);
@@ -379,7 +379,7 @@ public class APIController {
 					}
 					
 					// check domain and range
-					if (!getPrefix(QUERY_PREFIX + prefix, triple.getPredicate()).equals("rdf:type") && !getPrefix(QUERY_PREFIX + prefix, triple.getPredicate()).equals("rdfs:label")) {
+					/*if (!triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>") && !triple.getPredicate().equals("<http://www.w3.org/2000/01/rdf-schema#label>") && triple.getObject().indexOf('"') < 0) {
 						String query3 = "SPARQL " + QUERY_PREFIX + prefix
 								+ "SELECT ?object from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
 								+ triple.getPredicate() + " rdfs:range ?range ."
@@ -389,7 +389,9 @@ public class APIController {
 						List<Map<String, String>> tuples2 = gettingStartedApplication.queryTuples(query3);
 						boolean flag = false;
 						for (Map<String, String> map : tuples2) {
-							if (getPrefix(QUERY_PREFIX + prefix, map.get("object")).equals(getPrefix(QUERY_PREFIX + prefix, triple.getObject()))) {
+							log("///////////////////////////////////////" + map.get("object"));
+							log("///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getObject()));
+							if (map.get("object").equals(getFullURI(QUERY_PREFIX + prefix, triple.getObject()))) {
 								flag = true;
 							}
 						}
@@ -399,7 +401,7 @@ public class APIController {
 							return new ResponseEntity<String>(message, status);
 						}
 					}
-				}
+				}*/
 			}
 			
 			log(query);
@@ -1062,47 +1064,61 @@ public class APIController {
 		return result;
 	}
 	
-	private static String getPrefix(String defaultPrefix, String url) {
-		if (url.indexOf("#") >= 0) {
-			String preUrl = url.substring(1, url.indexOf("#"));
-			int urlIndex = defaultPrefix.indexOf(preUrl);
-			if (urlIndex >= 0) { 
-				String tempSubString = defaultPrefix.substring(0, urlIndex);
-				int pIndex = tempSubString.lastIndexOf("PREFIX");
-				return defaultPrefix.substring(pIndex + 7, urlIndex - 2) + ":" + url.substring(url.indexOf("#") + 1, url.length() - 1); 
-			}
+	/*private static String getPrefix(String defaultPrefix, String url) {
+		String preUrl = url.substring(1, url.indexOf("#"));
+		int urlIndex = defaultPrefix.indexOf(preUrl);
+		if (urlIndex >= 0) { 
+			String tempSubString = defaultPrefix.substring(0, urlIndex);
+			int pIndex = tempSubString.lastIndexOf("PREFIX");
+			return defaultPrefix.substring(pIndex + 7, urlIndex - 2) + ":" + url.substring(url.indexOf("#") + 1, url.length() - 1); 
 		}
 		return url;
+	}*/
+	
+	private static String getFullURI(String defaultPrefix, String prefixS) {
+		if (prefixS.indexOf(":") > 0) {
+			String prefix = prefixS.substring(0, prefixS.indexOf(":"));
+			int index = defaultPrefix.indexOf("PREFIX " + prefix);
+			if (index >= 0) {
+				String tempSubString = defaultPrefix.substring(index, defaultPrefix.length());
+				return tempSubString.substring(9 + prefix.length(), tempSubString.indexOf(">")) + prefixS.substring(prefixS.indexOf(":") + 1) + ">";
+			}
+		}
+		return prefixS;
 	}
 	
 	private List<Map<String, String>> prepareNode(String resource, ResultSet results) {
 		List<Map<String, String>> concepts = new ArrayList<Map<String,String>>();
         while (results.hasNext()) {
         	QuerySolution sol = results.nextSolution();
-        	Map<String, String> concept = new HashMap<String, String>();
-        	//concept.put("subject", query.shortForm(sol.get("class").asNode().getURI()));
-        	//concept.put("predicate", "rdfs:subClassOf");
-        	//concept.put("object", query.shortForm(sol.get("type").asNode().getURI()));
-        	if (sol.get("subject") != null) {
-    			concept.put("subject", "<" + sol.get("subject").asNode().getURI() + ">");
-        	} else {
-        		concept.put("subject", "<" + resource + ">");
+        	if (!sol.get("object").isLiteral() || (sol.get("object").isLiteral() && (sol.get("object").asLiteral().getLanguage().equals("en") || sol.get("object").asLiteral().getLanguage().isEmpty()))) {
+        		Map<String, String> concept = new HashMap<String, String>();
+	        	
+	        	//concept.put("subject", query.shortForm(sol.get("class").asNode().getURI()));
+	        	//concept.put("predicate", "rdfs:subClassOf");
+	        	//concept.put("object", query.shortForm(sol.get("type").asNode().getURI()));
+	        	if (sol.get("subject") != null) {
+	    			concept.put("subject", "<" + sol.get("subject").asNode().getURI() + ">");
+	        	} else {
+	        		concept.put("subject", "<" + resource + ">");
+	        	}
+	    		concept.put("predicate", "<" + sol.get("predicate").asNode().getURI() + ">");
+	        	if (sol.get("object").isLiteral()) {
+	        		if (sol.get("object").asLiteral().getDatatypeURI() != null) {
+	        			concept.put("object", '"' + sol.get("object").asLiteral().getString() + '"' + "^^<" + sol.get("object").asLiteral().getDatatypeURI() + ">");
+	        		} else {
+	        			concept.put("object", '"' + sol.get("object").asLiteral().getString() + '"' + "@en");
+	        		}
+	        		/*String lang = "";
+	        		if (sol.get("object").asLiteral().getLanguage() != null && !sol.get("object").asLiteral().getLanguage().isEmpty()) {
+	        			lang = "@" + sol.get("object").asLiteral().getLanguage();
+	        		}*/
+	    			
+	    		} else {
+	    			concept.put("object", "<" + sol.get("object").asNode().getURI() + ">");
+	    		}
+	        	concepts.add(concept);
         	}
-    		concept.put("predicate", "<" + sol.get("predicate").asNode().getURI() + ">");
-        	if (sol.get("object").isLiteral()) {
-        		String dataType = "http://www.w3.org/2001/XMLSchema#string";
-        		if (sol.get("object").asLiteral().getDatatypeURI() != null) {
-        			dataType = sol.get("object").asLiteral().getDatatypeURI();
-        		}
-        		String lang = "";
-        		if (sol.get("object").asLiteral().getLanguage() != null && !sol.get("object").asLiteral().getLanguage().isEmpty()) {
-        			lang = "@" + sol.get("object").asLiteral().getLanguage();
-        		}
-    			concept.put("object", '"' + sol.get("object").asLiteral().getString() + '"' + lang + "^^<" + dataType + ">");
-    		} else {
-    			concept.put("object", "<" + sol.get("object").asNode().getURI() + ">");
-    		}
-        	concepts.add(concept);
         }
         return concepts;
 	}
@@ -1149,7 +1165,7 @@ public class APIController {
 		}
         qExe.close();*/
 		
-		String query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <http://localhost:8890/noon/instance> WHERE {"
+		/*String query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <http://localhost:8890/noon/instance> WHERE {"
 					+ "?subject ?predicate ?object"
 				+ "}";
 		
@@ -1175,7 +1191,9 @@ public class APIController {
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		}
+		}*/
+		
+		log(getFullURI(QUERY_PREFIX, "dbres:Ballasalla"));
 	}
 }
 
