@@ -64,9 +64,9 @@ public class APIController {
 			+ "PREFIX virt:<http://www.openlinksw.com/schemas/virtrdf#>"
 			+ "PREFIX ns:<http://rdfs.org/sioc/ns#>"
 			+ "PREFIX type:<http://rdfs.org/sioc/types#>"
-			+ "PREFIX dbpedia-owl: <http://dbpedia.org/ontology/>"
-			+ "PREFIX dbpprop: <http://dbpedia.org/property/>"
-			+ "PREFIX dbres: <http://dbpedia.org/resource/>";
+			+ "PREFIX dbpedia-owl:<http://dbpedia.org/ontology/>"
+			+ "PREFIX dbpprop:<http://dbpedia.org/property/>"
+			+ "PREFIX dbres:<http://dbpedia.org/resource/>";
 	
 	private static String DEFAULT_GRAPH = "<http://localhost:8890/test>";
 	private static String DEFAULT_SCHEMA = "<http://localhost:8890/schema/test>";
@@ -121,6 +121,10 @@ public class APIController {
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
+			status = HttpStatus.BAD_REQUEST;
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -178,6 +182,10 @@ public class APIController {
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
+			status = HttpStatus.BAD_REQUEST;
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -225,6 +233,10 @@ public class APIController {
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
+			status = HttpStatus.BAD_REQUEST;
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -272,6 +284,10 @@ public class APIController {
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
+			status = HttpStatus.BAD_REQUEST;
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -343,7 +359,7 @@ public class APIController {
 				}
 				
 				// check level members
-				/*if (level.equals("model")) {
+				if (level.equals("model")) {
 					String query2 = "SPARQL " + QUERY_PREFIX + prefix
 							+ "SELECT ?instance from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
 							+ "?type rdfs:subClassOf* rdfs:Resource ."
@@ -351,6 +367,9 @@ public class APIController {
 						+ "}";
 					List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
 					for (Map<String, String> map : tuples) {
+						log("///////////////////////////////////////" + map.get("instance"));
+						log("///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getSubject()));
+						log("///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getObject()));
 						if (map.get("instance").equals(getFullURI(QUERY_PREFIX + prefix, triple.getSubject())) || map.get("instance").equals(getFullURI(QUERY_PREFIX + prefix, triple.getObject()))) {
 							status = HttpStatus.BAD_REQUEST;
 							message = "Some inserted triples are not in the model level!";
@@ -365,7 +384,12 @@ public class APIController {
 					
 					List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
 					for (Map<String, String> map : tuples) {
-						if (triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) {
+						log("instance///////////////////////////////////////" + map.get("class"));
+						log("instance///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getSubject()));
+						log("instance///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getObject()));
+						log(getFullURI(QUERY_PREFIX + prefix, triple.getPredicate()));
+						if (getFullURI(QUERY_PREFIX + prefix, triple.getPredicate()).equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) {
+							log("instance///////////////////////////////////////type");
 							if (map.get("class").equals(getFullURI(QUERY_PREFIX + prefix, triple.getSubject()))) {
 								status = HttpStatus.BAD_REQUEST;
 								message = "Some inserted triples are not in the instance level!";
@@ -379,7 +403,7 @@ public class APIController {
 					}
 					
 					// check domain and range
-					/*if (!triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>") && !triple.getPredicate().equals("<http://www.w3.org/2000/01/rdf-schema#label>") && triple.getObject().indexOf('"') < 0) {
+					if (!getFullURI(QUERY_PREFIX + prefix, triple.getPredicate()).equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>") && !getFullURI(QUERY_PREFIX + prefix, triple.getPredicate()).equals("<http://www.w3.org/2000/01/rdf-schema#label>") && triple.getObject().indexOf('"') < 0) {
 						String query3 = "SPARQL " + QUERY_PREFIX + prefix
 								+ "SELECT ?object from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
 								+ triple.getPredicate() + " rdfs:range ?range ."
@@ -389,8 +413,8 @@ public class APIController {
 						List<Map<String, String>> tuples2 = gettingStartedApplication.queryTuples(query3);
 						boolean flag = false;
 						for (Map<String, String> map : tuples2) {
-							log("///////////////////////////////////////" + map.get("object"));
-							log("///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getObject()));
+							log("conform///////////////////////////////////////" + map.get("object"));
+							log("conform///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getObject()));
 							if (map.get("object").equals(getFullURI(QUERY_PREFIX + prefix, triple.getObject()))) {
 								flag = true;
 							}
@@ -401,7 +425,7 @@ public class APIController {
 							return new ResponseEntity<String>(message, status);
 						}
 					}
-				}*/
+				}
 			}
 			
 			log(query);
@@ -413,6 +437,10 @@ public class APIController {
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
+			status = HttpStatus.BAD_REQUEST;
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -489,6 +517,7 @@ public class APIController {
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} catch (IllegalArgumentException e) {
 			status = HttpStatus.BAD_REQUEST;
@@ -553,6 +582,10 @@ public class APIController {
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
+			status = HttpStatus.BAD_REQUEST;
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -861,7 +894,7 @@ public class APIController {
 			}
 			
 			String query = "SPARQL " + QUERY_PREFIX + prefix
-					+ "SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <" + repo_name + "/instance> WHERE {"
+					+ "SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
 						+ instance +" ?predicate1 ?subject . "
 						+ "?subject ?predicate ?object"
 					+ "}";
@@ -908,8 +941,13 @@ public class APIController {
 			String s1 = QUERY_PREFIX 
 					+ "SELECT distinct ?subject ?predicate ?object WHERE { "
 						+ "?subject rdfs:subClassOf* <" + ontology + "> . "
-						+ "?subject ?predicate ?object"
+						+ "?subject ?predicate ?object "
+						+ "FILTER (?predicate = <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ||"
+						+ "?predicate = <http://www.w3.org/2000/01/rdf-schema#subClassOf> ||"
+						+ "(?predicate = <http://www.w3.org/2000/01/rdf-schema#label> && langMatches(lang(?object), 'EN')) ||"
+						+ "(?predicate = <http://www.w3.org/2000/01/rdf-schema#comment> && langMatches(lang(?object), 'EN')))"
 					+ "}";
+			log(s1);
 			Query query = QueryFactory.create(s1);
 	        qExe = QueryExecutionFactory.sparqlService(endpointURL, query );
 	        ResultSet results = qExe.execSelect();
@@ -930,8 +968,12 @@ public class APIController {
 					+ "select distinct ?subject ?predicate ?object where {"
 					+ "?class rdfs:subClassOf* <" + ontology + "> . "
 					+ "?subject <http://www.w3.org/2000/01/rdf-schema#domain> ?class ."
-					+ "?subject ?predicate ?object}";
+					+ "?subject ?predicate ?object "
+					+ "FILTER (?predicate = <http://www.w3.org/2000/01/rdf-schema#domain> ||"
+					+ "?predicate = <http://www.w3.org/2000/01/rdf-schema#range>)"
+					+ "}";
 
+	        log(s2);
 	        query = QueryFactory.create(s3);
 	        qExe = QueryExecutionFactory.sparqlService(endpointURL, query );
 	        results = qExe.execSelect();
@@ -942,7 +984,7 @@ public class APIController {
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
-			// TODO Auto-generated catch block
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} finally {
 			if (qExe != null)
@@ -991,7 +1033,7 @@ public class APIController {
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
-			// TODO Auto-generated catch block
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} finally {
 			if (qExe != null)
@@ -1076,12 +1118,12 @@ public class APIController {
 	}*/
 	
 	private static String getFullURI(String defaultPrefix, String prefixS) {
-		if (prefixS.indexOf(":") > 0) {
+		if (prefixS != null && prefixS.indexOf(":") > 0) {
 			String prefix = prefixS.substring(0, prefixS.indexOf(":"));
-			int index = defaultPrefix.indexOf("PREFIX " + prefix);
+			int index = defaultPrefix.indexOf("PREFIX " + prefix + ":");
 			if (index >= 0) {
 				String tempSubString = defaultPrefix.substring(index, defaultPrefix.length());
-				return tempSubString.substring(9 + prefix.length(), tempSubString.indexOf(">")) + prefixS.substring(prefixS.indexOf(":") + 1) + ">";
+				return tempSubString.substring(8 + prefix.length(), tempSubString.indexOf(">")) + prefixS.substring(prefixS.indexOf(":") + 1) + ">";
 			}
 		}
 		return prefixS;
@@ -1193,6 +1235,7 @@ public class APIController {
 			e.printStackTrace();
 		}*/
 		
+		log("noon");
 		log(getFullURI(QUERY_PREFIX, "dbres:Ballasalla"));
 	}
 }

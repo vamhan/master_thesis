@@ -6,6 +6,7 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 
+import model.DBConnector;
 import model.Triple;
 import model.UserManager;
 
@@ -498,7 +499,7 @@ public class Testing {
         	retSrc = EntityUtils.toString(entity); 
         	result = new JSONArray(retSrc);
         	assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
-        	assertTrue(result.length() == 0);
+        	assertTrue(result.length() > 0);
 			
 	        
 		} catch (Exception e1) {
@@ -629,6 +630,194 @@ public class Testing {
 			post.setEntity(triple);
 			response = client.execute(post);
 			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_BAD_REQUEST);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/repositories?repo_name=www.mydata.com"));
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        DBConnector conn = new DBConnector();
+	        conn.connect();
+	        conn.update("DB.DBA.TTLP(' @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . "
+					  + "<http://rdfs.org/sioc/ns#Passive> rdfs:subClassOf <http://www.w3.org/2000/01/rdf-schema#Resource> . "
+					  + "<http://rdfs.org/sioc/ns#Dataset> rdfs:subClassOf <http://rdfs.org/sioc/ns#Passive> . "
+					  + "<http://rdfs.org/sioc/ns#Feature> rdfs:subClassOf <http://rdfs.org/sioc/ns#Passive> . "
+					  + "<http://rdfs.org/sioc/ns#DataProperty> rdfs:subClassOf <http://www.w3.org/2000/01/rdf-schema#Resource> . "
+					  + "<http://rdfs.org/sioc/ns#Dictionary> rdfs:subClassOf <http://www.w3.org/2000/01/rdf-schema#Resource> . "
+					  + "<http://rdfs.org/sioc/ns#Dataset> <http://rdfs.org/sioc/ns#hasFeature>  <http://rdfs.org/sioc/ns#Feature> . "
+					  + "<http://rdfs.org/sioc/ns#hasFeature> <http://www.w3.org/2000/01/rdf-schema#domain> <http://rdfs.org/sioc/ns#Dataset>. "
+					  + "<http://rdfs.org/sioc/ns#hasFeature> <http://www.w3.org/2000/01/rdf-schema#range> <http://rdfs.org/sioc/ns#Feature>. "
+					  + "<http://rdfs.org/sioc/ns#Passive> <http://rdfs.org/sioc/ns#hasProperty>  <http://rdfs.org/sioc/ns#DataProperty> . "
+					  + "<http://rdfs.org/sioc/ns#hasProperty> <http://www.w3.org/2000/01/rdf-schema#domain> <http://rdfs.org/sioc/ns#Passive>. "
+					  + "<http://rdfs.org/sioc/ns#hasProperty> <http://www.w3.org/2000/01/rdf-schema#range> <http://rdfs.org/sioc/ns#DataProperty>. "
+					  + "<http://rdfs.org/sioc/ns#Passive> <http://rdfs.org/sioc/ns#hasDomainConcept>  <http://rdfs.org/sioc/ns#Dictionary> . "
+					  + "<http://rdfs.org/sioc/ns#hasDomainConcept> <http://www.w3.org/2000/01/rdf-schema#domain> <http://rdfs.org/sioc/ns#Passive>. "
+					  + "<http://rdfs.org/sioc/ns#hasDomainConcept> <http://www.w3.org/2000/01/rdf-schema#range> <http://rdfs.org/sioc/ns#Dictionary>. "
+					  + "<http://rdfs.org/sioc/ns#MissingValueDataSet> rdfs:subClassOf <http://rdfs.org/sioc/ns#Dataset> . "
+					  + "<http://rdfs.org/sioc/ns#MeanSD> rdfs:subClassOf <http://rdfs.org/sioc/ns#DataProperty> . "
+					  + "', '', 'www.mydata.com/model')");
+	        conn.update("DB.DBA.TTLP(' @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . "
+		        		+ "<http://rdfs.org/sioc/ns#dataset1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>  <http://rdfs.org/sioc/ns#Dataset>. "
+		        		+ "<http://rdfs.org/sioc/ns#city>  <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>  <http://rdfs.org/sioc/ns#Feature> . "
+		        		+ "<http://rdfs.org/sioc/ns#salary>  <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>  <http://rdfs.org/sioc/ns#Feature> . "
+		        		+ "<http://rdfs.org/sioc/ns#dataset1> <http://rdfs.org/sioc/ns#hasFeature> <http://rdfs.org/sioc/ns#city> . "
+		        		+ "<http://rdfs.org/sioc/ns#dataset1> <http://rdfs.org/sioc/ns#hasFeature> <http://rdfs.org/sioc/ns#salary> . "
+		        		+ "', '', 'www.mydata.com/instance')");
+	        conn.closeConnection();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
+	        triple = new StringEntity("[{\"subject\":\"ns:dataset1\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:age\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_BAD_REQUEST);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
+	        triple = new StringEntity("[{\"subject\":\"ns:MissingValueDataSet\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:Feature\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
+	        triple = new StringEntity("[{\"subject\":\"ns:MissingValueDataSet\",\"predicate\":\"rdfs:label\",\"object\":\"'miss'\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
+	        triple = new StringEntity("[{\"subject\":\"ns:MissingValueDataSet\",\"predicate\":\"rdf:type\",\"object\":\"owl:Class\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        triple = new StringEntity("[{\"subject\":\"ns:MissingValueDataSet\",\"predicate\":\"rdf:type\",\"object\":\"owl:Class\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_BAD_REQUEST);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"rdf:type\",\"object\":\"ns:Dataset\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"rdfs:label\",\"object\":\"'dataset2'\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:Feature\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_BAD_REQUEST);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:age\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_BAD_REQUEST);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:city\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
+	        triple = new StringEntity("[{\"subject\":\"ns:TempFeature\",\"predicate\":\"rdfs:subClassOf\",\"object\":\"ns:Feature\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        triple = new StringEntity("[{\"subject\":\"ns:age\",\"predicate\":\"rdf:type\",\"object\":\"ns:TempFeature\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:age\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:dataset1\"}]");
+	        triple.setContentType("application/json");
+	        post.setEntity(triple);
+			response = client.execute(post);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_BAD_REQUEST);
+			enty = response.getEntity();
+	        if (enty != null)
+	            enty.consumeContent();
+	        
+	        HttpDelete delete = new HttpDelete(host + "/repositories?repo_name=www.mydata.com");
+ 			delete.setHeader("Authorization", "Basic " + authStringEnc);
+ 			response = client.execute(delete);
+ 			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
+ 			enty = response.getEntity();
+ 	        if (enty != null)
+ 	            enty.consumeContent();
+	        
 			
 			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_ACCEPTED);
 			

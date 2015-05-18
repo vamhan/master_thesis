@@ -97,7 +97,7 @@ public class UserManager {
 	}
 	
 	public void deleteGraph(String graph) {
-		String query = "SPARQL DROP GRAPH <" + graph + ">";
+		String query = "SPARQL CLEAR GRAPH <" + graph + ">";
 		try {
 			connector.update(query);
 		} catch (SQLException e) {
