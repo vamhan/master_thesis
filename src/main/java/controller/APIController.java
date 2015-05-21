@@ -1,20 +1,17 @@
 package controller;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.nio.charset.Charset;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.StringTokenizer;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Set;
 
 import model.DBConnector;
 import model.EmptyObject;
@@ -35,6 +32,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.hateoas.Link;
 
@@ -43,6 +41,8 @@ import static org.springframework.hateoas.mvc.ControllerLinkBuilder.methodOn;
 import controller.TripleStoreConnector;
 
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.jena.riot.RDFDataMgr;
 
 import com.hp.hpl.jena.query.Query;
 import com.hp.hpl.jena.query.QueryExecution;
@@ -50,6 +50,9 @@ import com.hp.hpl.jena.query.QueryExecutionFactory;
 import com.hp.hpl.jena.query.QueryFactory;
 import com.hp.hpl.jena.query.QuerySolution;
 import com.hp.hpl.jena.query.ResultSet;
+import com.hp.hpl.jena.rdf.model.Model;
+import com.hp.hpl.jena.rdf.model.Statement;
+import com.hp.hpl.jena.rdf.model.StmtIterator;
 
 @RestController
 public class APIController {
@@ -304,7 +307,7 @@ public class APIController {
 	
 	@RequestMapping(value="/triples", method=RequestMethod.POST)
 	@ResponseBody
-	public HttpEntity<String> addTriples(String[] args, @RequestHeader("Authorization") String Authorization, @RequestBody List<Triple> triples, @RequestParam String repo_name, @RequestParam String level, String prefix) {
+	public HttpEntity<String> addTriples(String[] args, @RequestHeader("Authorization") String Authorization, @RequestBody List<Triple> triples, @RequestParam String repo_name, @RequestParam String level, String prefix, boolean notCheckValid) {
 		HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
 		TripleStoreConnector gettingStartedApplication = null;
 		String message = "Adding triples fails";
@@ -326,7 +329,7 @@ public class APIController {
 			
 			String graph = "";
 			if (level.equals("model") || level.equals("instance")) {
-				graph = "<" + repo_name + "/" + level + ">";
+				graph = repo_name + "/" + level;
 				if (level.equals("model")) {
 					if (!manager.isUserHasPermission(manager.getUserIDFromUsername(username), repo_name + "/model" , true)) {
 						status = HttpStatus.FORBIDDEN;
@@ -348,83 +351,19 @@ public class APIController {
 				prefix = "";
 			}
 			
-			String query = "SPARQL " + QUERY_PREFIX + prefix + "INSERT INTO GRAPH " + graph + " {";
+			String query = "DB.DBA.TTLP('" + QUERY_PREFIX + prefix;
 			for (int i = 0; i < triples.size(); i++) {
 				Triple triple = triples.get(i);
-				query += triple.getSubject() + " " + triple.getPredicate() + " " + triple.getObject();
+				query += triple.getSubject() + " " + triple.getPredicate() + " " + convertToUTF8(triple.getObject());
 				if (i < triples.size() - 1) {
 					query += ". ";
 				} else {
-					query += "}";
+					query += ".', '', '" + graph + "')";
 				}
 				
-				// check level members
-				if (level.equals("model")) {
-					String query2 = "SPARQL " + QUERY_PREFIX + prefix
-							+ "SELECT ?instance from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
-							+ "?type rdfs:subClassOf* rdfs:Resource ."
-							+ "?instance a ?type"
-						+ "}";
-					List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
-					for (Map<String, String> map : tuples) {
-						log("///////////////////////////////////////" + map.get("instance"));
-						log("///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getSubject()));
-						log("///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getObject()));
-						if (map.get("instance").equals(getFullURI(QUERY_PREFIX + prefix, triple.getSubject())) || map.get("instance").equals(getFullURI(QUERY_PREFIX + prefix, triple.getObject()))) {
-							status = HttpStatus.BAD_REQUEST;
-							message = "Some inserted triples are not in the model level!";
-							return new ResponseEntity<String>(message, status);
-						}
-					}
-				} else {
-					String query2 = "SPARQL " + QUERY_PREFIX + prefix
-							+ "SELECT ?class from <" + repo_name + "/model> WHERE { "
-								+ "?class rdfs:subClassOf* rdfs:Resource"
-							+ "}";
-					
-					List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
-					for (Map<String, String> map : tuples) {
-						log("instance///////////////////////////////////////" + map.get("class"));
-						log("instance///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getSubject()));
-						log("instance///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getObject()));
-						log(getFullURI(QUERY_PREFIX + prefix, triple.getPredicate()));
-						if (getFullURI(QUERY_PREFIX + prefix, triple.getPredicate()).equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) {
-							log("instance///////////////////////////////////////type");
-							if (map.get("class").equals(getFullURI(QUERY_PREFIX + prefix, triple.getSubject()))) {
-								status = HttpStatus.BAD_REQUEST;
-								message = "Some inserted triples are not in the instance level!";
-								return new ResponseEntity<String>(message, status);
-							}
-						} else if (map.get("class").equals(getFullURI(QUERY_PREFIX + prefix, triple.getSubject())) || map.get("class").equals(getFullURI(QUERY_PREFIX + prefix, triple.getObject()))) {
-							status = HttpStatus.BAD_REQUEST;
-							message = "Some inserted triples are not in the instance level!";
-							return new ResponseEntity<String>(message, status);
-						}
-					}
-					
-					// check domain and range
-					if (!getFullURI(QUERY_PREFIX + prefix, triple.getPredicate()).equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>") && !getFullURI(QUERY_PREFIX + prefix, triple.getPredicate()).equals("<http://www.w3.org/2000/01/rdf-schema#label>") && triple.getObject().indexOf('"') < 0) {
-						String query3 = "SPARQL " + QUERY_PREFIX + prefix
-								+ "SELECT ?object from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
-								+ triple.getPredicate() + " rdfs:range ?range ."
-								+ "?model rdfs:subClassOf* ?range ."
-								+ "?object a ?model ."
-							+ "}";
-						List<Map<String, String>> tuples2 = gettingStartedApplication.queryTuples(query3);
-						boolean flag = false;
-						for (Map<String, String> map : tuples2) {
-							log("conform///////////////////////////////////////" + map.get("object"));
-							log("conform///////////////////////////////////////" + getFullURI(QUERY_PREFIX + prefix, triple.getObject()));
-							if (map.get("object").equals(getFullURI(QUERY_PREFIX + prefix, triple.getObject()))) {
-								flag = true;
-							}
-						}
-						if (!flag) {
-							status = HttpStatus.BAD_REQUEST;
-							message = "Some inserted triples are not conformed to the model";
-							return new ResponseEntity<String>(message, status);
-						}
-					}
+				HttpEntity<String> result = checkValid(level, QUERY_PREFIX + prefix, repo_name, gettingStartedApplication, triple, notCheckValid);
+				if (result != null) {
+					return result;
 				}
 			}
 			
@@ -445,6 +384,202 @@ public class APIController {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		} catch (NoSuchFieldException e) {
+			e.printStackTrace();
+		} finally {
+			if (gettingStartedApplication != null)
+				gettingStartedApplication.shutdown();
+		}
+
+		return new ResponseEntity<String>(message, status);
+	}
+	
+	private HttpEntity<String> checkValid(String level, String prefix, String repo_name, TripleStoreConnector gettingStartedApplication, Triple triple, boolean notCheckValid) {
+		HttpStatus status;
+		String message;
+		if (level.equals("model")) {
+			String query2 = "SPARQL " + prefix
+					+ "SELECT ?instance from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
+					+ "?type rdfs:subClassOf* rdfs:Resource ."
+					+ "?instance a ?type"
+				+ "}";
+			List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
+			for (Map<String, String> map : tuples) {
+				log("///////////////////////////////////////" + map.get("instance"));
+				log("///////////////////////////////////////" + getFullURI(prefix, triple.getSubject()));
+				log("///////////////////////////////////////" + getFullURI(prefix, triple.getObject()));
+				if (map.get("instance").equals(getFullURI(prefix, triple.getSubject()))) {
+					status = HttpStatus.BAD_REQUEST;
+					message = triple.getSubject() + " is not in the model level!";
+					return new ResponseEntity<String>(message, status);
+				} else if (map.get("instance").equals(getFullURI(prefix, triple.getObject()))) {
+					status = HttpStatus.BAD_REQUEST;
+					message = triple.getObject() + " is not in the model level!";
+					return new ResponseEntity<String>(message, status);
+				}
+			}
+		} else {
+			String query2 = "SPARQL " + prefix
+					+ "SELECT ?class from <" + repo_name + "/model> WHERE { "
+						+ "?class rdfs:subClassOf* rdfs:Resource"
+					+ "}";
+			
+			List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
+			for (Map<String, String> map : tuples) {
+				log("instance///////////////////////////////////////" + map.get("class"));
+				log("instance///////////////////////////////////////" + getFullURI(prefix, triple.getSubject()));
+				log("instance///////////////////////////////////////" + getFullURI(prefix, triple.getObject()));
+				log(getFullURI(prefix, triple.getPredicate()));
+				if (getFullURI(prefix, triple.getPredicate()).equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) {
+					log("instance///////////////////////////////////////type");
+					if (map.get("class").equals(getFullURI(prefix, triple.getSubject()))) {
+						status = HttpStatus.BAD_REQUEST;
+						message = triple.getSubject() + " is not in the instance level!";
+						return new ResponseEntity<String>(message, status);
+					}
+				} else if (map.get("class").equals(getFullURI(prefix, triple.getSubject()))) {
+					status = HttpStatus.BAD_REQUEST;
+					message = triple.getSubject() + " is not in the instance level!";
+					return new ResponseEntity<String>(message, status);
+				} else if (map.get("class").equals(getFullURI(prefix, triple.getObject()))) {
+					status = HttpStatus.BAD_REQUEST;
+					message = triple.getObject() + " is not in the instance level!";
+					return new ResponseEntity<String>(message, status);
+				}
+			}
+			
+			// check domain and range
+			if (!notCheckValid && !getFullURI(prefix, triple.getPredicate()).equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>") && !getFullURI(prefix, triple.getPredicate()).equals("<http://www.w3.org/2000/01/rdf-schema#label>") && triple.getObject().indexOf('"') < 0) {
+				String query3 = "SPARQL " + prefix
+						+ "SELECT ?object from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
+						+ triple.getPredicate() + " rdfs:range ?range ."
+						+ "?model rdfs:subClassOf* ?range ."
+						+ "?object a ?model ."
+					+ "}";
+				List<Map<String, String>> tuples2 = gettingStartedApplication.queryTuples(query3);
+				boolean pass = false;
+				for (Map<String, String> map : tuples2) {
+					log("conform///////////////////////////////////////" + map.get("object"));
+					log("conform///////////////////////////////////////" + getFullURI(prefix, triple.getObject()));
+					if (map.get("object").equals(getFullURI(prefix, triple.getObject()))) {
+						pass = true;
+						break;
+					}
+				}
+				if (!pass && tuples2.size() > 0) {
+					status = HttpStatus.BAD_REQUEST;
+					message = triple.getPredicate() + " is not conformed to the model (" + triple.getObject() + ")";
+					return new ResponseEntity<String>(message, status);
+				}
+			}
+		}
+		return null;
+	}
+	
+	@RequestMapping(value="/import", method=RequestMethod.POST)
+	@ResponseBody
+	public HttpEntity<String> importRDF(String[] args, @RequestHeader("Authorization") String Authorization, @RequestParam("file") MultipartFile file, @RequestParam String repo_name, @RequestParam String level) {
+		HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+		TripleStoreConnector gettingStartedApplication = null;
+		String message = "Import fails";
+		
+		String[] us_pass = getUsernameAndPassword(Authorization);
+		String username = us_pass[0];
+		String password = us_pass[1];
+		
+		try {
+			repo_name = java.net.URLDecoder.decode(repo_name, "UTF-8");
+
+			gettingStartedApplication = new TripleStoreConnector(TripleStoreConnector.initiateParameters(args).getParameters(), username, password);
+			
+			UserManager manager = new UserManager(username, password);
+			
+			String graph = "";
+			if (level.equals("model") || level.equals("instance")) {
+				graph = repo_name + "/" + level;
+				if (level.equals("model")) {
+					if (!manager.isUserHasPermission(manager.getUserIDFromUsername(username), repo_name + "/model" , true)) {
+						status = HttpStatus.FORBIDDEN;
+						return new ResponseEntity<String>(message, status);
+					}
+				} else {
+					if (!manager.isUserHasPermission(manager.getUserIDFromUsername(username), repo_name + "/instance" , true)) {
+						status = HttpStatus.FORBIDDEN;
+						return new ResponseEntity<String>(message, status);
+					}
+				}
+			} else {
+				status = HttpStatus.BAD_REQUEST;
+				message = "Level parameter can be only model or instance";
+				return new ResponseEntity<String>(message, status);
+			}
+			
+			String extension = FilenameUtils.getExtension(file.getOriginalFilename());
+			if (!extension.equals("ttl") && !extension.equals("nt") && !extension.equals("n3") && !extension.equals("rdf") && !extension.equals("xml")) {
+				status = HttpStatus.BAD_REQUEST;
+				message = "This file type is not supported. Only .ttl, .nt, .n3, .rdf, .xml are allowed";
+				return new ResponseEntity<String>(message, status);
+			}
+			File f = File.createTempFile("tmp", "." + extension);
+			FileOutputStream fos = new FileOutputStream(f); 
+		    fos.write(file.getBytes());
+		    fos.close(); 
+			Model model = RDFDataMgr.loadModel(f.getAbsolutePath());
+			String prefix = "";
+			Set<String> ns = model.getNsPrefixMap().keySet();
+			for (String key : ns) {
+				prefix += "PREFIX " + key + ":<" + model.getNsPrefixMap().get(key) + ">";
+			}
+			log(prefix);
+			
+			StmtIterator stmtIter = model.listStatements();
+			while ( stmtIter.hasNext() ) {
+				Statement stmt = stmtIter.nextStatement();
+		        Triple triple = new Triple();
+		        triple.setSubject("<" + stmt.getSubject().getURI() + ">");
+		        triple.setPredicate("<" + stmt.getPredicate().getURI() + ">");
+		        if (stmt.getObject().isLiteral()) {
+	        		if (stmt.getObject().asLiteral().getDatatypeURI() != null) {
+	        			triple.setObject('"' + stmt.getObject().asLiteral().getString() + '"' + "^^<" + stmt.getObject().asLiteral().getDatatypeURI() + ">");
+	        		} else {
+	        			triple.setObject('"' + stmt.getObject().asLiteral().getString() + '"' + "@en");
+	        		}
+	    			
+	    		} else {
+	    			triple.setObject("<" + stmt.getObject().asNode().getURI() + ">");
+	    		}
+		        
+		        HttpEntity<String> result = checkValid(level, prefix, repo_name, gettingStartedApplication, triple, false);
+				if (result != null) {
+					return result;
+				}
+		    }
+			
+			String query;
+			if (extension.equals("ttl") || extension.equals("nt") || extension.equals("n3")) {
+				query = "DB.DBA.TTLP(file_to_string_output('" + f.getAbsolutePath() +"'), '','" + graph + "')";
+			} else {
+				query = "DB.DBA.RDF_LOAD_RDFXML(file_to_string_output('" + f.getAbsolutePath() +"'), '','" + graph + "')";
+			}
+			
+			gettingStartedApplication.update(query);
+			status = HttpStatus.OK;
+			message  = "Import succeeds";
+			f.delete();
+		} catch (UnauthorizedException e) {
+			status = HttpStatus.UNAUTHORIZED;
+		} catch (UnsupportedEncodingException e) {
+			status = HttpStatus.BAD_REQUEST;
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			status = HttpStatus.BAD_REQUEST;
+			e.printStackTrace();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} catch (NoSuchFieldException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			status = HttpStatus.BAD_REQUEST;
+			message = "There is something wrong with the imported file!";
 			e.printStackTrace();
 		} finally {
 			if (gettingStartedApplication != null)
@@ -924,65 +1059,96 @@ public class APIController {
 	
 	@RequestMapping("/ontology")
 	@ResponseBody
-	public HttpEntity<List<Map<String, String>>> ontology(String[] args, @RequestHeader("Authorization") String Authorization, @RequestParam String endpointURL, @RequestParam String ontology) {
+	public HttpEntity<List<Map<String, String>>> ontology(String[] args, @RequestParam String endpointURL, @RequestParam String ontology) {
 		HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
 		QueryExecution qExe = null;
 		List<Map<String, String>> concepts = new ArrayList<Map<String, String>>();
 		
-		String[] us_pass = getUsernameAndPassword(Authorization);
-		String username = us_pass[0];
-		String password = us_pass[1];
-		
 		try {
-			UserManager manager = new UserManager(username, password);
 			endpointURL = java.net.URLDecoder.decode(endpointURL, "UTF-8");
 			ontology = java.net.URLDecoder.decode(ontology, "UTF-8");
 			
-			String s1 = QUERY_PREFIX 
+			String s1 = "";
+			Query query;
+			ResultSet results;
+			/*if (getAllDescendants) {
+				s1 = "{select ?subject ?predicate ?object where {?subject rdfs:subClassOf* <" + ontology + ">. ?subject ?predicate ?object}} "
+					+ "union"
+					+ "{select ?subject ?predicate ?object where {<" + ontology + "> rdfs:subClassOf* ?subject. ?subject ?predicate ?object}} ";
+			} else {
+				s1 = "<" + ontology + "> rdfs:subClassOf* ?subject . ?subject ?predicate ?object ";
+			}*/
+			
+			String q1 = QUERY_PREFIX 
 					+ "SELECT distinct ?subject ?predicate ?object WHERE { "
-						+ "?subject rdfs:subClassOf* <" + ontology + "> . "
+						+ "?subject rdfs:subClassOf* " + ontology + ". "
 						+ "?subject ?predicate ?object "
 						+ "FILTER (?predicate = <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ||"
 						+ "?predicate = <http://www.w3.org/2000/01/rdf-schema#subClassOf> ||"
 						+ "(?predicate = <http://www.w3.org/2000/01/rdf-schema#label> && langMatches(lang(?object), 'EN')) ||"
 						+ "(?predicate = <http://www.w3.org/2000/01/rdf-schema#comment> && langMatches(lang(?object), 'EN')))"
 					+ "}";
-			log(s1);
-			Query query = QueryFactory.create(s1);
+			log(q1);
+			query = QueryFactory.create(q1);
 	        qExe = QueryExecutionFactory.sparqlService(endpointURL, query );
-	        ResultSet results = qExe.execSelect();
+	        results = qExe.execSelect();
 	        concepts.addAll(prepareNode("", results));
 			
-			String s2 = QUERY_PREFIX
+	        /*if (getAllDescendants) {
+				s1 = "{select ?subject ?predicate ?object where {?subject rdfs:subClassOf* <" + ontology + "> ."
+						+ "?predicate <http://www.w3.org/2000/01/rdf-schema#domain> ?subject ."
+						+ "?predicate <http://www.w3.org/2000/01/rdf-schema#range> ?object}} "
+					+ "union"
+					+ "{select ?subject ?predicate ?object where {<" + ontology + "> rdfs:subClassOf* ?subject ."
+						+ "?predicate <http://www.w3.org/2000/01/rdf-schema#domain> ?subject ."
+						+ "?predicate <http://www.w3.org/2000/01/rdf-schema#range> ?object}} ";
+			} else {
+				s1 = "<" + ontology + "> rdfs:subClassOf* ?subject . "
+						+ "?predicate <http://www.w3.org/2000/01/rdf-schema#domain> ?subject ."
+						+ "?predicate <http://www.w3.org/2000/01/rdf-schema#range> ?object";
+			}*/
+			String q2 = QUERY_PREFIX
 					+ "select distinct ?subject ?predicate ?object where {"
-					+ "?subject rdfs:subClassOf* <" + ontology + "> . "
+					+ "?subject rdfs:subClassOf* " + ontology + " ."
 					+ "?predicate <http://www.w3.org/2000/01/rdf-schema#domain> ?subject ."
 					+ "?predicate <http://www.w3.org/2000/01/rdf-schema#range> ?object}";
 
-	        query = QueryFactory.create(s2);
+			log(q2);
+	        query = QueryFactory.create(q2);
 	        qExe = QueryExecutionFactory.sparqlService(endpointURL, query );
 	        results = qExe.execSelect();
 	        concepts.addAll(prepareNode("", results));
 	        
-	        String s3 = QUERY_PREFIX
+	        /*if (getAllDescendants) {
+				s1 = "{select ?subject ?predicate ?object where {?class rdfs:subClassOf* <" + ontology + "> ."
+						+ "?subject <http://www.w3.org/2000/01/rdf-schema#domain> ?class ."
+						+ "?subject ?predicate ?object}} "
+					+ "union"
+					+ "{select ?subject ?predicate ?object where {<" + ontology + "> rdfs:subClassOf* ?class ."
+						+ "?subject <http://www.w3.org/2000/01/rdf-schema#domain> ?class ."
+						+ "?subject ?predicate ?object}} ";
+			} else {
+				s1 = "<" + ontology + "> rdfs:subClassOf* ?class . "
+						+ "?subject <http://www.w3.org/2000/01/rdf-schema#domain> ?class ."
+						+ "?subject ?predicate ?object ";
+			}*/
+	        String q3 = QUERY_PREFIX
 					+ "select distinct ?subject ?predicate ?object where {"
-					+ "?class rdfs:subClassOf* <" + ontology + "> . "
+					+ "?class rdfs:subClassOf* " + ontology + " ."
 					+ "?subject <http://www.w3.org/2000/01/rdf-schema#domain> ?class ."
 					+ "?subject ?predicate ?object "
 					+ "FILTER (?predicate = <http://www.w3.org/2000/01/rdf-schema#domain> ||"
 					+ "?predicate = <http://www.w3.org/2000/01/rdf-schema#range>)"
 					+ "}";
 
-	        log(s2);
-	        query = QueryFactory.create(s3);
+	        log(q3);
+	        query = QueryFactory.create(q3);
 	        qExe = QueryExecutionFactory.sparqlService(endpointURL, query );
 	        results = qExe.execSelect();
 	        concepts.addAll(prepareNode("", results));
 	        
 			status = HttpStatus.OK;
 				
-		} catch (UnauthorizedException e) {
-			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
 			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
@@ -996,30 +1162,38 @@ public class APIController {
 	
 	@RequestMapping("/ontology/resources")
 	@ResponseBody
-	public HttpEntity<List<Map<String, String>>> ontologyResource(String[] args, @RequestHeader("Authorization") String Authorization, @RequestParam String endpointURL, @RequestParam String ontology, String resource) {
+	public HttpEntity<List<Map<String, String>>> ontologyResource(String[] args, @RequestParam String endpointURL, String ontology, String resource) {
 		HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
 		QueryExecution qExe = null;
 		List<Map<String, String>> concepts = new ArrayList<Map<String, String>>();
 		
-		String[] us_pass = getUsernameAndPassword(Authorization);
-		String username = us_pass[0];
-		String password = us_pass[1];
-		
 		try {
-			UserManager manager = new UserManager(username, password);
 			endpointURL = java.net.URLDecoder.decode(endpointURL, "UTF-8");
-			ontology = java.net.URLDecoder.decode(ontology, "UTF-8");
+			if (ontology != null) {
+				ontology = java.net.URLDecoder.decode(ontology, "UTF-8");
+			}
+			if (resource != null) {
+				resource = java.net.URLDecoder.decode(resource, "UTF-8");
+			}
 			
 			String s = "";
-			if (resource != null) {
+			if (ontology == null && resource == null) {
+				status = HttpStatus.BAD_REQUEST;
+				return new ResponseEntity<List<Map<String, String>>>(concepts, status);
+			} else if (resource != null) {
 				s = QUERY_PREFIX + "SELECT distinct ?predicate ?object WHERE {"
-						+ "?type rdfs:subClassOf* <" + ontology + "> ."
-						+ "?predicate <http://www.w3.org/2000/01/rdf-schema#domain> ?type ."
-						+ "<" + resource + "> ?predicate ?object }";
+						//+ "?type rdfs:subClassOf* <" + ontology + "> ."
+						//+ "?predicate <http://www.w3.org/2000/01/rdf-schema#domain> ?type ."
+						+ "values (?v) { (owl:ObjectProperty)(owl:DatatypeProperty) }"
+						+ "?predicate a ?v ."
+						+ resource + " ?predicate ?object }";
 			} else {
 				s = QUERY_PREFIX + "SELECT distinct ?subject ?predicate ?object WHERE {"
-						+ "?type rdfs:subClassOf* <" + ontology + "> ."
-						+ "?predicate <http://www.w3.org/2000/01/rdf-schema#domain> ?type ."
+						//+ "?type rdfs:subClassOf* <" + ontology + "> ."
+						//+ "?predicate <http://www.w3.org/2000/01/rdf-schema#domain> ?type ."
+						+ "values (?v) { (owl:ObjectProperty)(owl:DatatypeProperty) }"
+						+ "?subject a " + ontology + " ."
+						+ "?predicate a ?v ."
 						+ "?subject ?predicate ?object }";
 			}
 
@@ -1027,11 +1201,9 @@ public class APIController {
 			Query query = QueryFactory.create(s);
 	        qExe = QueryExecutionFactory.sparqlService(endpointURL, query );
 	        ResultSet results = qExe.execSelect();
-	        concepts.addAll(prepareNode(resource, results));
+	        concepts.addAll(prepareNode(getFullURI(QUERY_PREFIX, resource).replace("<", "").replace(">", ""), results));
 			status = HttpStatus.OK;
 				
-		} catch (UnauthorizedException e) {
-			status = HttpStatus.UNAUTHORIZED;
 		} catch (UnsupportedEncodingException e) {
 			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
@@ -1042,6 +1214,9 @@ public class APIController {
 
 		return new ResponseEntity<List<Map<String, String>>>(concepts, status);
 	}
+	
+	
+	
 	
 	@RequestMapping("/sparql")
 	@ResponseBody
@@ -1176,67 +1351,23 @@ public class APIController {
     }
 	
 	public static void main(String[] args) {
-
-		/*String s2 = "PREFIX rdfs:<http://www.w3.org/2000/01/rdf-schema#>"
-				+ "PREFIX xsd:<http://www.w3.org/2001/XMLSchema#>"
-				+ "PREFIX owl:<http://www.w3.org/2002/07/owl#>"
-				+ "PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
-				+ "PREFIX dbpedia-owl: <http://dbpedia.org/ontology/>"
-				+ "PREFIX dbpprop: <http://dbpedia.org/property/>"
-				+ "PREFIX dbres: <http://dbpedia.org/resource/>"
-				+ "PREFIX rdfs:<http://www.w3.org/2000/01/rdf-schema#>"
-				+ "select distinct ?subject ?predicate ?object where {"
-				+ "?subject rdfs:subClassOf* <http://dbpedia.org/ontology/Settlement> . "
-				+ "?predicate <http://www.w3.org/2000/01/rdf-schema#domain> ?subject ."
-				+ "?predicate <http://www.w3.org/2000/01/rdf-schema#range> ?object}";
-
-        Query query = QueryFactory.create(s2); //s2 = the query above
-        QueryExecution qExe = QueryExecutionFactory.sparqlService( "http://dbpedia.org/sparql", query );
-        ResultSet results = qExe.execSelect();
-        List<Map<String, String>> concepts = new ArrayList<Map<String,String>>();
-        while (results.hasNext()) {
-        	QuerySolution sol = results.nextSolution();
-        	Map<String, String> concept = new HashMap<String, String>();
-        	concept.put("subject", query.shortForm(sol.get("subject").asNode().getURI()));
-        	concept.put("predicate", query.shortForm(sol.get("predicate").asNode().getURI()));
-        	concept.put("object", query.shortForm(sol.get("object").asNode().getURI()));
-        	concepts.add(concept);
-        }
-        for (Map<String, String> map : concepts) {
-			System.out.println(map);
-		}
-        qExe.close();*/
 		
-		/*String query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <http://localhost:8890/noon/instance> WHERE {"
-					+ "?subject ?predicate ?object"
-				+ "}";
+		/*APIController con = new APIController();
+		Triple triple = new Triple();
+		triple.setSubject("<http://dbpedia.org/resource/Barcelona>");
+		triple.setPredicate("<http://dbpedia.org/ontology/abstract>");
+		triple.setObject("\"Barcelona (English /bɑrsɨˈloʊnə/, Catalan: [bərsəˈɫonə], Spanish: [barθeˈlona]) is the capital city of the autonomous community of Catalonia in Spain, and its 2nd largest city, with a population of 1.6 million within its administrative limits.Its urban area extends beyond the administrative city limits with a population of around 4.5 million people, being the sixth-most populous urban area in the European Union after Paris, London, the Ruhr, Madrid and Milan. About five million people live in the Barcelona metropolitan area. It is the largest metropolis on the Mediterranean Sea, located on the coast between the mouths of the rivers Llobregat and Besòs, and bounded to the west by the Serra de Collserola mountain range, the tallest peak of which is 512 metres (1,680 ft) high.Founded as a Roman city, in the Middle Ages Barcelona became the capital of the County of Barcelona. After merging with the Kingdom of Aragon, Barcelona continued to be an important city in the Crown of Aragon. Besieged several times during its history, Barcelona has a rich cultural heritage and is today an important cultural centre and a major tourist destination. Particularly renowned are the architectural works of Antoni Gaudí and Lluís Domènech i Montaner, which have been designated UNESCO World Heritage Sites. The headquarters of the Union for the Mediterranean is located in Barcelona. The city is known for hosting the 1992 Summer Olympics as well as world-class conferences and expositions and also many international sport tournaments.Barcelona is one of the world's leading tourist, economic, trade fair/exhibitions and cultural-sports centres, and its influence in commerce, education, entertainment, media, fashion, science, and the arts all contribute to its status as one of the world's major global cities. It is a major cultural and economic centre in southwestern Europe (Iberian Peninsula), 24th in the world (before Zürich, after Frankfurt) and a financial centre (Diagonal Mar and Gran Via). In 2008 it was the fourth most economically powerful city by GDP in the European Union and 35th in the world with GDP amounting to €177 billion. In 2012 Barcelona had a GDP of $170 billion; it is lagging Spain on both employment and GDP per capita change. In 2009 the city was ranked Europe's third and one of the world's most successful as a city brand. In the same year the city was ranked Europe's fourth best city for business and fastest improving European city, with growth improved by 17% per year, but it has since been in a full recession with declines in both employment and GDP per capita, with some recent signs of the beginning of an economic recovery. Barcelona is a transport hub with one of Europe's principal seaports, an international airport which handles above 35 million passengers per year, an extensive motorway network and a high-speed rail line with a link to France and the rest of Europe.\"@en");
+		List<Triple> list = new ArrayList<Triple>();
+		list.add(triple);
+		con.addTriples(null, "Basic ZGJhOmRiYQ==", list, "http://localhost:8890/noon", "instance", "");*/
 		
-		String s = "Здравей' хора";
-		String out;
-		try {
-			out = new String(s.getBytes("UTF-8"), "ISO-8859-1");
-			for (int i = 0; i < out.length(); ++i) {
-	            System.out.printf("%x ", (int) out.charAt(i));
-	        }
-			System.out.println();
-			String ss = new String(out.getBytes("ISO-8859-1"), "UTF-8");
-			System.out.println(ss);
-		} catch (UnsupportedEncodingException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
-		
-		DBConnector conn = new DBConnector();
-		conn.connect();
-		try {
-			conn.queryTuples(query);
-		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}*/
-		
-		log("noon");
-		log(getFullURI(QUERY_PREFIX, "dbres:Ballasalla"));
+		Model model = RDFDataMgr.loadModel("./ontology/example.rdf");
+		log(model.getNsPrefixMap().toString());
+		StmtIterator stmtIter = model.listStatements();
+		while ( stmtIter.hasNext() ) {
+	        Statement stmt = stmtIter.nextStatement();
+	        log(stmt.getSubject().getURI() + " " + stmt.getPredicate().getURI());
+	    }
 	}
 }
 
