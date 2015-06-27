@@ -4,10 +4,13 @@ controller/TripleStoreConnector$FileWalker$1.class
 controller/Application.class
 model/EmptyObject.class
 model/UserManager.class
+controller/NotificationTest.class
 model/Instance.class
 controller/TripleStoreConnector$1.class
 model/Triple.class
+controller/Notification.class
 controller/TripleStoreConnector.class
+controller/APIController$1.class
 controller/TripleStoreConnector$Parameters.class
 controller/TripleStoreConnector$FileWalker$Handler.class
 model/DBConnector.class

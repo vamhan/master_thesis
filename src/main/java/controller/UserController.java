@@ -4,10 +4,10 @@ import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import model.Triple;
 import model.UserManager;
 import model.UserManager.Role;
 
@@ -16,7 +16,6 @@ import org.openrdf.http.protocol.UnauthorizedException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -268,11 +267,11 @@ public class UserController {
 				manager.createGraph(repo_name + "/model");
 				manager.createGraph(repo_name + "/instance");
 				status = HttpStatus.OK;
-				message = "Create new repository fails succeeds";
+				message = "Create new repository succeeds";
 			}
 
 		} catch (SQLException e) {
-			status = HttpStatus.INTERNAL_SERVER_ERROR;
+			status = HttpStatus.BAD_REQUEST;
 			e.printStackTrace();
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
@@ -364,6 +363,41 @@ public class UserController {
 		}
 
 		return new ResponseEntity<String>(message, status);
+	}
+	
+	@RequestMapping("/login")
+	@ResponseBody
+	public HttpEntity<Map<String, String>> login(@RequestHeader("Authorization") String Authorization, String repo_name) {
+		HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+		Map<String, String> tuple = new HashMap<String, String>();
+		
+		String[] us_pass = getUsernameAndPassword(Authorization);
+		String username = us_pass[0];
+		String password = us_pass[1];
+		
+		UserManager manager = null;
+		try {
+			
+			manager = new UserManager(username, password);
+			if (!manager.isUserHasPermission(manager.getUserIDFromUsername(username), repo_name + "/model" , false)) {
+				status = HttpStatus.FORBIDDEN;
+			} else {
+				tuple = manager.getUserInfo(username, repo_name);
+				status = HttpStatus.OK;
+			}
+
+		} catch (UnauthorizedException e) {
+			status = HttpStatus.UNAUTHORIZED;
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} catch (NoSuchFieldException e) {
+			e.printStackTrace();
+		} finally {
+			if (manager != null)
+				manager.closeConnection();
+		}
+
+		return new ResponseEntity<Map<String, String>>(tuple, status);
 	}
 	
 	private static SimpleDateFormat logTimestamp = new SimpleDateFormat("HH:mm:ss ");

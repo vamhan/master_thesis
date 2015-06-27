@@ -25,5 +25,14 @@
 	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/jena-iri-1.0.1.jar"/>
 	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/xercesImpl-2.11.0.jar"/>
 	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/xml-apis-1.4.01.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/rome-1.0.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/jdom-1.1.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/activation-1.1.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/java-mail-1.4.4.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/javax.jms.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/imq-4.2.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/appserv-rt.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/javaee.jar"/>
+	<classpathentry kind="lib" path="/Users/vamhan/Downloads/apache-tomcat-7.0.52/webapps/ROOT/MiningMetaDataRepository/lib/javax.ws.rs.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

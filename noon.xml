@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+  <channel>
+    <title>Sample Feed (created with ROME)</title>
+    <link>http://rome.dev.java.net</link>
+    <description>This feed has been created using ROME (Java syndication utilities</description>
+    <item>
+      <title>ROME v1.0</title>
+      <link>http://wiki.java.net/bin/view/Javawsxml/Rome01</link>
+      <description>Initial release of ROME</description>
+      <pubDate>Mon, 07 Jun 2004 22:00:00 GMT</pubDate>
+      <guid>http://wiki.java.net/bin/view/Javawsxml/Rome01</guid>
+      <dc:date>2004-06-07T22:00:00Z</dc:date>
+    </item>
+    <item>
+      <title>ROME v2.0</title>
+      <link>http://wiki.java.net/bin/view/Javawsxml/Rome02</link>
+      <description>Bug fixes, minor API changes and some new features</description>
+      <pubDate>Tue, 15 Jun 2004 22:00:00 GMT</pubDate>
+      <guid>http://wiki.java.net/bin/view/Javawsxml/Rome02</guid>
+      <dc:date>2004-06-15T22:00:00Z</dc:date>
+    </item>
+    <item>
+      <title>ROME v3.0</title>
+      <link>http://wiki.java.net/bin/view/Javawsxml/Rome03</link>
+      <description>&lt;p&gt;More Bug fixes, mor API changes, some new features and some Unit testing&lt;/p&gt;&lt;p&gt;For details check the &lt;a href="https://rometools.jira.com/wiki/display/ROME/Change+Log#ChangeLog-Changesmadefromv0.3tov0.4"&gt;Changes Log&lt;/a&gt;&lt;/p&gt;</description>
+      <pubDate>Mon, 26 Jul 2004 22:00:00 GMT</pubDate>
+      <guid>http://wiki.java.net/bin/view/Javawsxml/Rome03</guid>
+      <dc:date>2004-07-26T22:00:00Z</dc:date>
+    </item>
+  </channel>
+</rss>
+

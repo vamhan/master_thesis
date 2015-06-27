@@ -1,26 +1,17 @@
 package model;
 
-import java.sql.CallableStatement;
 import java.sql.DriverManager;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import org.openrdf.http.protocol.UnauthorizedException;
-import org.openrdf.query.Binding;
-import org.openrdf.query.BindingSet;
-import org.openrdf.query.Operation;
-import org.openrdf.query.QueryEvaluationException;
-import org.openrdf.query.TupleQuery;
-import org.openrdf.query.TupleQueryResult;
 
 import virtuoso.jdbc4.*;
 
@@ -37,7 +28,6 @@ public class DBConnector {
 		try {
 			connect(username, password);
 		} catch (UnauthorizedException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -165,11 +155,11 @@ public class DBConnector {
 							}
 						} else if (o instanceof VirtuosoRdfBox) {
 							VirtuosoRdfBox rb = (VirtuosoRdfBox) o;
-							value = rb.rb_box + " lang=" + rb.getLang() + " type=" + (rs.getString("datatype") == null ? "http://www.w3.org/2001/XMLSchema#string" : rs.getString("datatype"));
+							value = rb.rb_box + " lang=" + rb.getLang() + (!hasDataType(data) ? "" : " type=" + (!hasDataType(data) ? "http://www.w3.org/2001/XMLSchema#string" : rs.getString("datatype")));
 						} else if (stmt.getResultSet().wasNull()) {
 							value = "NULL";
 						} else {
-							value = s + " lang=null type=" + (rs.getString("datatype") == null ? "http://www.w3.org/2001/XMLSchema#string" : rs.getString("datatype"));
+							value = s + " lang=null" + (!hasDataType(data) ? "" : " type=" + (rs.getString("datatype") == null ? "http://www.w3.org/2001/XMLSchema#string" : rs.getString("datatype")));
 						}
 						tuple.put(data.getColumnName(i), value);
 					}
@@ -210,13 +200,13 @@ public class DBConnector {
 		}
 	}
 	
-	private static String convertFromUTF8(String s) {
-        String out = null;
-        try {
-            out = new String(s.getBytes("ISO-8859-1"), "UTF-8");
-        } catch (java.io.UnsupportedEncodingException e) {
-            return null;
-        }
-        return out;
-    }
+	private boolean hasDataType(ResultSetMetaData rsmd) throws SQLException {
+	    int columns = rsmd.getColumnCount();
+	    for (int x = 1; x <= columns; x++) {
+	        if (rsmd.getColumnName(x).equals("datatype")) {
+	            return true;
+	        }
+	    }
+	    return false;
+	}
 }

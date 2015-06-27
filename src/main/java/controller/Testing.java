@@ -17,12 +17,6 @@ import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.yaml.snakeyaml.util.UriEncoder;
 import org.apache.http.client.ClientProtocolException;
@@ -41,11 +35,18 @@ import org.apache.http.message.BasicNameValuePair;
 import static org.junit.Assert.*;
 
 public class Testing {
-	
-	private static String DEFAULT_GRAPH = "<http://localhost:8890/noon>";
-	private static String DEFAULT_SCHEMA = "<http://localhost:8890/schema/test>";
-	private static String DEFAULT_RULE = "http://localhost:8890/schema/property_rules1";
-	private static String host = "http://localhost:8080";
+
+	private static String host = "http://localhost:8081/myapp";
+	private static String prefix = "[{ \"prefix\": \"rdfs\", \"url\": \"http://www.w3.org/2000/01/rdf-schema#\"},"
+  + "{ \"prefix\": \"rdf\", \"url\": \"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"},"
+  + "{ \"prefix\": \"ns\", \"url\": \"http://rdfs.org/sioc/ns#\"},"
+  + "{ \"prefix\": \"ex\", \"url\": \"http://example.org/owlim#\"},"
+  + "{ \"prefix\": \"type\", \"url\": \"http://rdfs.org/sioc/types#\"},"
+  + "{ \"prefix\": \"xsd\", \"url\": \"http://www.w3.org/2001/XMLSchema#\"},"
+  + "{ \"prefix\": \"owl\", \"url\": \"http://www.w3.org/2002/07/owl#\"},"
+  + "{ \"prefix\": \"dbpedia-owl\", \"url\": \"http://dbpedia.org/ontology/\"},"
+  + "{ \"prefix\": \"dbpprop\", \"url\": \"http://dbpedia.org/property/\"},"
+  + "{ \"prefix\": \"dbres\", \"url\": \"http://dbpedia.org/resource/\"}]";
 	
 	@Test
 	public void testUser() {
@@ -56,7 +57,7 @@ public class Testing {
 		try {
 			
 			// create user
-			String authString = "vamhan:123";
+			String authString = "abc:123";
 			byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
 			String authStringEnc = new String(authEncBytes);
 			post.setHeader("Authorization", "Basic " + authStringEnc);
@@ -71,7 +72,7 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 
-			authString = "vamhan:mofnun";
+			authString = "abc:1234";
 			authEncBytes = Base64.encodeBase64(authString.getBytes());
 			authStringEnc = new String(authEncBytes);
 			post.setHeader("Authorization", "Basic " + authStringEnc);
@@ -562,11 +563,13 @@ public class Testing {
     
     @Test
 	public void testAddTriples() {
-		HttpClient client = new DefaultHttpClient();
-    	HttpPost post = new HttpPost(host + "/triples?repo_name=www.noon.com&level=model");
-    	HttpResponse response;
-    	HttpEntity entity;
-		try {
+    	HttpPost post = null;
+    	try {
+			
+			HttpClient client = new DefaultHttpClient();
+	    	post = new HttpPost(host + "/triples?repo_name=www.noon.com&level=model&prefix=" + URLEncoder.encode(prefix, "UTF-8"));
+	    	HttpResponse response;
+	    	HttpEntity entity;
 			
 			String authString = "dba:dba";
 			byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
@@ -585,7 +588,7 @@ public class Testing {
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
 			response = client.execute(post);
-			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_BAD_REQUEST);
+			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_INTERNAL_SERVER_ERROR);
 			enty = response.getEntity();
 	        if (enty != null)
 	            enty.consumeContent();
@@ -670,7 +673,7 @@ public class Testing {
 		        		+ "', '', 'www.mydata.com/instance')");
 	        conn.closeConnection();
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model&prefix=" + URLEncoder.encode(prefix, "UTF-8")));
 	        triple = new StringEntity("[{\"subject\":\"ns:dataset1\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:age\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -680,7 +683,6 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
 	        triple = new StringEntity("[{\"subject\":\"ns:MissingValueDataSet\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:Feature\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -690,7 +692,6 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
 	        triple = new StringEntity("[{\"subject\":\"ns:MissingValueDataSet\",\"predicate\":\"rdfs:label\",\"object\":\"'miss'\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -700,7 +701,6 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
 	        triple = new StringEntity("[{\"subject\":\"ns:MissingValueDataSet\",\"predicate\":\"rdf:type\",\"object\":\"owl:Class\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -710,7 +710,7 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance&prefix=" + URLEncoder.encode(prefix, "UTF-8")));
 	        triple = new StringEntity("[{\"subject\":\"ns:MissingValueDataSet\",\"predicate\":\"rdf:type\",\"object\":\"owl:Class\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -720,7 +720,6 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
 	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"rdf:type\",\"object\":\"ns:Dataset\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -730,7 +729,6 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
 	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"rdfs:label\",\"object\":\"'dataset2'\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -739,8 +737,7 @@ public class Testing {
 			enty = response.getEntity();
 	        if (enty != null)
 	            enty.consumeContent();
-	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+
 	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:Feature\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -749,18 +746,16 @@ public class Testing {
 			enty = response.getEntity();
 	        if (enty != null)
 	            enty.consumeContent();
-	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
-	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:age\"}]");
+
+	        /*triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:age\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
 			response = client.execute(post);
 			assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_BAD_REQUEST);
 			enty = response.getEntity();
 	        if (enty != null)
-	            enty.consumeContent();
+	            enty.consumeContent();*/
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
 	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:city\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -770,7 +765,7 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model"));
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=model&prefix=" + URLEncoder.encode(prefix, "UTF-8")));
 	        triple = new StringEntity("[{\"subject\":\"ns:TempFeature\",\"predicate\":\"rdfs:subClassOf\",\"object\":\"ns:Feature\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -780,7 +775,7 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance&prefix=" + URLEncoder.encode(prefix, "UTF-8")));
 	        triple = new StringEntity("[{\"subject\":\"ns:age\",\"predicate\":\"rdf:type\",\"object\":\"ns:TempFeature\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -789,8 +784,7 @@ public class Testing {
 			enty = response.getEntity();
 	        if (enty != null)
 	            enty.consumeContent();
-	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+
 	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:age\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -799,8 +793,7 @@ public class Testing {
 			enty = response.getEntity();
 	        if (enty != null)
 	            enty.consumeContent();
-	        
-	        post.setURI(new URI(host + "/triples?repo_name=www.mydata.com&level=instance"));
+
 	        triple = new StringEntity("[{\"subject\":\"ns:dataset2\",\"predicate\":\"ns:hasFeature\",\"object\":\"ns:dataset1\"}]");
 	        triple.setContentType("application/json");
 	        post.setEntity(triple);
@@ -832,10 +825,11 @@ public class Testing {
     @Test
     public void testTypeInstances() {
     	HttpClient client = new DefaultHttpClient();
-    	HttpGet get = new HttpGet(host + "/types/ex:Human/instances?repo_name=www.noon.com");
+    	HttpGet get = null;
     	HttpResponse response;
     	HttpEntity entity;
 		try {
+			get = new HttpGet(host + "/types/ex:Human/instances?repo_name=www.noon.com&prefix=" + URLEncoder.encode(prefix, "UTF-8"));
 			String authString = "dba:dba";
 			byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
 			String authStringEnc = new String(authEncBytes);
@@ -854,10 +848,6 @@ public class Testing {
 	        if (enty != null)
 	            enty.consumeContent();
 	        
-	        String prefix = UriEncoder.encode("PREFIX nn:<http://noon.com#>");
-	        get.setURI(new URI(host + "/types/nn:Animal/instances?repo_name=www.noon.com&prefix=" + prefix));
-	        response = client.execute(get);
-	        assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_OK);
 	        
 	        assertTrue(response.getStatusLine().getStatusCode() == HttpStatus.SC_ACCEPTED);
 			

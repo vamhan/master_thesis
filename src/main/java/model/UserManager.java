@@ -1,18 +1,13 @@
 package model;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URL;
 import java.sql.*;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.openrdf.http.protocol.UnauthorizedException;
-import org.springframework.http.HttpStatus;
 
-import controller.TripleStoreConnector;
 
 public class UserManager {
 
@@ -87,13 +82,9 @@ public class UserManager {
 		connector.update("DB.DBA.RDF_GRAPH_GROUP_INS ('" + group + "', '" + graph + "')");
 	}
 	
-	public void createGraph(String graph) {
+	public void createGraph(String graph) throws SQLException {
 		String query = "SPARQL CREATE GRAPH <" + graph + ">";
-		try {
-			connector.update(query);
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
+		connector.update(query);
 	}
 	
 	public void deleteGraph(String graph) {
@@ -138,6 +129,38 @@ public class UserManager {
 			throw new SQLException(e);
 		} finally {
 			stmt.close();
+		}
+	}
+	
+	public Map<String, String> getUserInfo(String username, String repo_name) throws SQLException {
+		String query = "select u1.U_ID as userid, u2.U_NAME as userrole from DB.DBA.SYS_USERS u1, DB.DBA.SYS_USERS u2 WHERE u1.U_GROUP = u2.U_ID and u1.U_NAME='" + username + "'";
+		DBConnector db = new DBConnector();
+		db.connect();
+		Connection conn = db.conn;
+		Statement stmt = null;
+		Map<String, String> tuple = new HashMap<String, String>();
+		try {
+			stmt = conn.createStatement();
+			ResultSet resultSet = stmt.executeQuery(query);
+			if (resultSet.next()) {
+				tuple.put("userid", resultSet.getString("userid"));
+				if (isUserHasPermission(resultSet.getString("userid"), repo_name + "/model", true)) {
+					tuple.put("permission", "3");
+				} else if (isUserHasPermission(resultSet.getString("userid"), repo_name + "/instance", true)) {
+					tuple.put("permission", "2");
+				} else if (isUserHasPermission(resultSet.getString("userid"), repo_name + "/model", false)) {
+					tuple.put("permission", "1");
+				} else {
+					tuple.put("permission", "0");
+				}
+			}
+			return tuple;
+		} catch (SQLException e) {
+			e.printStackTrace();
+			throw new SQLException(e);
+		} finally {
+			stmt.close();
+			db.closeConnection();
 		}
 	}
 
@@ -225,6 +248,33 @@ public class UserManager {
 		}
 	}
 	
+	public List<Map<String, String>> getSubscriberList(String repo_name, String level) throws SQLException {
+		String query = "select * from DB.DBA.Subscription where repo_name = '" + repo_name + "'";
+		DBConnector db = new DBConnector();
+		db.connect();
+		Connection conn = db.conn;
+		Statement stmt = null;
+		List<Map<String, String>> result = new ArrayList<Map<String,String>>();
+		try {
+			stmt = conn.createStatement();
+			ResultSet r = stmt.executeQuery(query);
+			while (r.next()) {
+				Map<String, String> map = new HashMap<String, String>();
+				map.put("level", r.getString("level"));
+				map.put("namespace", r.getString("namespace"));
+				map.put("email", r.getString("email"));
+				result.add(map);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+			throw new SQLException(e);
+		} finally {
+			stmt.close();
+			db.closeConnection();
+		}
+		return result;
+	}
+	
 	public boolean isUserHasPermission(String userid, String graph, boolean canWrite) throws SQLException {
 		try {
 			if (getUserRole(getUsernameFromID(userid)).toString().equals("superAdmin")) {
@@ -267,12 +317,12 @@ public class UserManager {
 		connector.closeConnection();
 	}
 
-	/*public static void main(String[] args) {
-		String username = "dba";
-		String password = "dba";
+	public static void main(String[] args) {
+		String username = "abc";
+		String password = "1234";
 		try {
 			UserManager manager = new UserManager(username, password);
-			if (manager.isUserHasPermission(manager.getUserIDFromUsername("dba"), "http://localhost:8890/noon", true)) {
+			if (manager.isUserHasPermission("109", "http://localhost:8890/noon/model", true)) {
 				System.out.println("yes");
 			}
 			//manager.dropUser("abc");
@@ -285,17 +335,10 @@ public class UserManager {
 			//manager.createGraphGroupPermissions("http://www.openlinksw.com/schemas/virtrdf#PrivateGraphs", 0);
 			//manager.setGraphGroupPermissions("http://www.openlinksw.com/schemas/virtrdf#PrivateGraphs", "http://localhost:8890/test");
 			//manager.setRdfGraphPermissions("vamhan", "http://www.openlinksw.com/schemas/virtrdf#PrivateGraphs", 0);
-			System.out.println(manager.listUsers());
-			
-			String query = "SPARQL SELECT * from <http://localhost:8890/schema/test> WHERE {"
-						+ "?subject ?predicate ?object"
-					+ "}";
-			 
-			TripleStoreConnector gettingStartedApplication = new TripleStoreConnector(TripleStoreConnector.initiateParameters(args).getParameters(), username, password);
-			System.out.println(gettingStartedApplication.queryTriples(query).get(0).getSubject());
+
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-	}*/
+	}
 }

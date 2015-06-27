@@ -1,7 +1,5 @@
 package model;
 
-import org.springframework.hateoas.ResourceSupport;
-
 public class EmptyObject extends HALResource {
 	private String message;
 
