@@ -851,7 +851,7 @@ public class APIController {
 		return new ResponseEntity<FileSystemResource>(file, status);
 	}
 	
-	@RequestMapping("/types")
+	/*@RequestMapping("/types")
 	@ResponseBody
 	public HttpEntity<EmptyObject> listTypes(@RequestHeader("Authorization") String Authorization, @RequestParam String repo_name) {
 		HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
@@ -895,7 +895,7 @@ public class APIController {
 			        	type.add(new Link("types/" + prefix + value + "/instances", "instances"));
 		        	}
 	        	}
-	        }*/
+	        }
 	        emp.embedResource("types", tuples);
 		} catch (UnauthorizedException e) {
 			status = HttpStatus.UNAUTHORIZED;
@@ -917,7 +917,7 @@ public class APIController {
 		}
 
 		return new ResponseEntity<EmptyObject>(emp, status);
-	}
+	}*/
 	
 	@RequestMapping("/types/{type}/instances")
 	@ResponseBody
@@ -1081,7 +1081,7 @@ public class APIController {
 			
 			String query = "SPARQL " + initPrefix(prefix)
 						+ "SELECT distinct ?predicate from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
-						   	+ instance + " rdf:type* ?model ."
+						   	+ instance + " rdf:type ?model ."
 							+ "?model rdfs:subClassOf* ?superModel . "
 							+ "?predicate rdfs:domain ?superModel ."
 						+ "}";
