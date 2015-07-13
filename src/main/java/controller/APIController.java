@@ -114,19 +114,15 @@ public class APIController {
 			String query = "";
 			if (level == null) {
 				query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype "
-						+ "from <" + repo_name + "/model>" + " from <" + repo_name + "/instance> WHERE {"
+						+ "from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
 						+ "?subject ?predicate ?object";
 			} else if (level.equals("metamodel")) {
 				query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype "
-						+ "from <" + repo_name + "/model> WHERE {"
-						+ "?subject rdfs:subClassOf* rdfs:Resource ."
+						+ "from <" + repo_name + "/metamodel> WHERE {"
 						+ "?subject ?predicate ?object";
 			} else if (level.equals("model")) {
 				query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype "
 						+ "from <" + repo_name + "/model> WHERE {"
-						+ "?meta rdfs:subClassOf* rdfs:Resource ."
-						+ "?model a ?meta ."
-						+ "?subject rdfs:subClassOf* ?model ."
 						+ "?subject ?predicate ?object";
 			} else if (level.equals("instance")) {
 				query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype "
@@ -135,7 +131,7 @@ public class APIController {
 			} else {
 				status = HttpStatus.BAD_REQUEST;
 				Map<String, String> map = new HashMap<String, String>();
-				map.put("message", "Level parameter can be only model or instance");
+				map.put("message", "Level parameter can be only metamodel, model or instance");
 				triples.add(map);
 				return new ResponseEntity<List<Map<String, String>>>(triples, status);
 			}
@@ -196,7 +192,8 @@ public class APIController {
 				return new ResponseEntity<List<Map<String, String>>>(tuples, status);
 			}
 			
-			String query = "SPARQL SELECT distinct ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <" + repo_name + "/model> from <" + repo_name + "/instance>  WHERE {"
+			String query = "SPARQL SELECT distinct ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype "
+					+ "from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance>  WHERE {"
 						+ "{?subject ?predicate ?object ."
 							+ "filter regex(str(?subject), '" + keyword + "', 'i') "
 							//+ (query_prefix != null ? "filter STRSTARTS(STR(?subject), str(" + query_prefix + ":))" : "")
@@ -260,7 +257,8 @@ public class APIController {
 				return new ResponseEntity<List<Map<String, String>>>(tuples, status);
 			}
 			
-			String query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
+			String query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype "
+					+ "from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
 						+ "{?subject ?predicate ?object ."
 						+ "filter regex(str(?subject), '" + keyword + "', 'i')}"
 					+ "}";
@@ -314,7 +312,8 @@ public class APIController {
 				return new ResponseEntity<List<Map<String, String>>>(tuples, status);
 			}
 			
-			String query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
+			String query = "SPARQL SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype "
+					+ "from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
 						+ "{?subject ?predicate ?object ."
 						+ "filter regex(str(?predicate), '" + keyword + "', 'i')}"
 					+ "}";
@@ -443,13 +442,53 @@ public class APIController {
 	private HttpEntity<String> checkValid(String level, String prefix, String repo_name, TripleStoreConnector gettingStartedApplication, List<Triple> triples, boolean notCheckValid) throws JSONException {
 		HttpStatus status;
 		String message;
+		
+		String query1 = "SPARQL " + initPrefix(prefix)
+				+ "SELECT distinct ?metamodel from <" + repo_name + "/metamodel> WHERE { "
+					+ "?metamodel ?p ?o"
+				+ "}";
+		List<Map<String, String>> metamodel = gettingStartedApplication.queryTuples(query1);
+		
+		String query2 = "SPARQL " + initPrefix(prefix)
+				+ "SELECT distinct ?class ?type from <" + repo_name + "/metamodel> from <" + repo_name + "/model> WHERE { "
+					+ "?class rdf:type ?subtype ."
+					+ "?subtype rdfs:subClassOf* ?type ."
+					+ "filter(?subtype != <http://www.w3.org/2000/01/rdf-schema#Class> && ?subtype != <http://www.w3.org/1999/02/22-rdf-syntax-ns#Property>)"
+				+ "}";
+		
+		List<Map<String, String>> model = gettingStartedApplication.queryTuples(query2);
+		
 		if (level.equals("model")) {
-			String query2 = "SPARQL " + initPrefix(prefix)
+			query2 = "SPARQL " + initPrefix(prefix)
 					+ "SELECT distinct ?instance from <" + repo_name + "/instance> WHERE { "
 					+ "?instance ?p ?o"
 				+ "}";
 			List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
+			
+			query2 = "SPARQL " + initPrefix(prefix)
+					+ "SELECT distinct ?predicate ?domain ?range from <" + repo_name + "/metamodel> WHERE { "
+					+ "?predicate rdf:type rdf:Property ."
+					+ "?predicate rdfs:domain ?domain ."
+					+ "?predicate rdfs:range ?range ."
+				+ "}";
+			List<Map<String, String>> predicates = gettingStartedApplication.queryTuples(query2);
+			
 			for (Triple triple : triples) {
+				for (Map<String, String> map : metamodel) {
+					if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getSubject()))) {
+						status = HttpStatus.BAD_REQUEST;
+						message = triple.getSubject() + " is not in the model level!";
+						return new ResponseEntity<String>(message, status);
+					} else if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getObject()))) {
+						status = HttpStatus.BAD_REQUEST;
+						message = triple.getObject() + " is not in the model level!";
+						return new ResponseEntity<String>(message, status);
+					} else if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getPredicate()))) {
+						status = HttpStatus.BAD_REQUEST;
+						message = triple.getPredicate() + " is not in the model level!";
+						return new ResponseEntity<String>(message, status);
+					}
+				}
 				for (Map<String, String> map : tuples) {
 					log("///////////////////////////////////////" + getFullPrefix(prefix, map.get("instance")));
 					log("///////////////////////////////////////" + getFullPrefix(prefix, triple.getSubject()));
@@ -464,16 +503,94 @@ public class APIController {
 						return new ResponseEntity<String>(message, status);
 					}
 				}
+				
+				if ((getFullPrefix(prefix, triple.getPredicate()).equals("rdf:type") || triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) 
+						&& (getFullPrefix(prefix, triple.getObject()).equals("rdf:Property") || triple.getObject().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#Property>"))) {
+					String domain = "";
+					String range = "";
+					for (Triple triple2 : triples) {
+						if (getFullPrefix(prefix, triple.getSubject()).equals(getFullPrefix(prefix, triple2.getSubject())) 
+								&& (getFullPrefix(prefix, triple2.getPredicate()).equals("rdf:type") || triple2.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"))
+								&& !(getFullPrefix(prefix, triple2.getObject()).equals("rdf:Property") || triple2.getObject().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#Property>"))){
+							for (Map<String, String> map : predicates) {
+								if (getFullPrefix(prefix, map.get("predicate")).equals(getFullPrefix(prefix, triple2.getObject()))) {
+									domain = getFullPrefix(prefix, map.get("domain"));
+									range = getFullPrefix(prefix, map.get("range"));
+								}
+							}
+						}
+					}
+					for (Triple triple2 : triples) {
+						if (getFullPrefix(prefix, triple.getSubject()).equals(getFullPrefix(prefix, triple2.getSubject())) 
+								&& (getFullPrefix(prefix, triple2.getPredicate()).equals("rdfs:domain") || triple2.getPredicate().equals("<http://www.w3.org/2000/01/rdf-schema#domain>"))){
+							boolean pass = false;
+							for (Map<String, String> map : model) {
+								if (getFullPrefix(prefix, map.get("class")).equals(getFullPrefix(prefix, triple2.getObject()))
+										&& getFullPrefix(prefix, map.get("type")).equals(domain)) {
+									pass = true;
+									break;
+								}
+							}
+							if (!pass) {
+								status = HttpStatus.BAD_REQUEST;
+								message = triple2.getPredicate() + " is not conformed to the metamodel (" + triple2.getSubject() + ")";
+								return new ResponseEntity<String>(message, status);
+							}
+						}
+						if (getFullPrefix(prefix, triple.getSubject()).equals(getFullPrefix(prefix, triple2.getSubject())) 
+								&& (getFullPrefix(prefix, triple2.getPredicate()).equals("rdfs:range") || triple2.getPredicate().equals("<http://www.w3.org/2000/01/rdf-schema#range>"))){
+							boolean pass = false;
+							for (Map<String, String> map : model) {
+								if (getFullPrefix(prefix, map.get("class")).equals(getFullPrefix(prefix, triple2.getObject()))
+										&& getFullPrefix(prefix, map.get("type")).equals(range)) {
+									pass = true;
+									break;
+								}
+							}
+							if (!pass) {
+								status = HttpStatus.BAD_REQUEST;
+								message = triple2.getPredicate() + " is not conformed to the metamodel (" + triple2.getObject() + ")";
+								return new ResponseEntity<String>(message, status);
+							}
+						}
+					}
+				}
 			}
 		} else {
-			String query2 = "SPARQL " + initPrefix(prefix)
-					+ "SELECT ?class from <" + repo_name + "/model> WHERE { "
-						+ "?class ?p ?o"
+			
+			query2 = "SPARQL " + initPrefix(prefix)
+					+ "SELECT distinct ?instance ?type from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
+						+ "?instance rdf:type ?subtype ."
+						+ "?subtype rdfs:subClassOf* ?type "
 					+ "}";
 			
-			List<Map<String, String>> tuples = gettingStartedApplication.queryTuples(query2);
+			List<Map<String, String>> instances = gettingStartedApplication.queryTuples(query2);
+			
+			String query3 = "SPARQL " + initPrefix(prefix)
+					+ "SELECT ?predicate ?domain ?range from <" + repo_name + "/model> WHERE { "
+					+ "?predicate rdfs:domain ?domain ."
+					+ "?predicate rdfs:range ?range ."
+				+ "}";
+			List<Map<String, String>> predicates = gettingStartedApplication.queryTuples(query3);
+			
 			for (Triple triple : triples) {
-				for (Map<String, String> map : tuples) {
+				for (Map<String, String> map : metamodel) {
+					if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getSubject()))) {
+						status = HttpStatus.BAD_REQUEST;
+						message = triple.getSubject() + " is not in the model level!";
+						return new ResponseEntity<String>(message, status);
+					} else if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getObject()))) {
+						status = HttpStatus.BAD_REQUEST;
+						message = triple.getObject() + " is not in the model level!";
+						return new ResponseEntity<String>(message, status);
+					} else if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getPredicate()))) {
+						status = HttpStatus.BAD_REQUEST;
+						message = triple.getPredicate() + " is not in the model level!";
+						return new ResponseEntity<String>(message, status);
+					}
+				}
+				
+				for (Map<String, String> map : model) {
 					log("instance///////////////////////////////////////" + getFullPrefix(prefix, map.get("class")));
 					log("instance///////////////////////////////////////" + getFullPrefix(prefix, triple.getSubject()));
 					log("instance///////////////////////////////////////" + getFullPrefix(prefix, triple.getObject()));
@@ -501,26 +618,29 @@ public class APIController {
 						&& !getFullPrefix(prefix, triple.getPredicate()).equals("rdf:type") && !triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>") 
 						&& !getFullPrefix(prefix, triple.getPredicate()).equals("rdfs:label") && !triple.getPredicate().equals("<http://www.w3.org/2000/01/rdf-schema#label>") 
 						&& triple.getObject().indexOf('"') < 0) {
-					String query3 = "SPARQL " + initPrefix(prefix)
-							+ "SELECT ?object from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
-							+ triple.getPredicate() + " rdfs:range ?range ."
-							+ "?model rdfs:subClassOf* ?range ."
-							+ "?object rdf:type* ?model ."
-						+ "}";
-					log(query3);
-					List<Map<String, String>> tuples2 = gettingStartedApplication.queryTuples(query3);
-					boolean pass = false;
-					for (Map<String, String> map : tuples2) {
-						log("conform///////////////////////////////////////" + getFullPrefix(prefix, map.get("object")));
-						log("conform///////////////////////////////////////" + getFullPrefix(prefix, triple.getObject()));
-						if (getFullPrefix(prefix, map.get("object")).equals(getFullPrefix(prefix, triple.getObject()))) {
-							pass = true;
-							break;
+
+					boolean pass1 = false;
+					boolean pass2 = false;
+					String domain = "";
+					String range = "";
+					for (Map<String, String> map : predicates) {
+						if (getFullPrefix(prefix, map.get("predicate")).equals(getFullPrefix(prefix, triple.getPredicate()))) {
+							domain = getFullPrefix(prefix, map.get("domain"));
+							range = getFullPrefix(prefix, map.get("range"));
 						}
 					}
-					if (!pass && tuples2.size() > 0) {
+					for (Map<String, String> map : instances) {
+						if (getFullPrefix(prefix, map.get("instance")).equals(getFullPrefix(prefix, triple.getSubject()))
+								&& getFullPrefix(prefix, map.get("type")).equals(domain)) {
+							pass1 = true;
+						} else if (getFullPrefix(prefix, map.get("instance")).equals(getFullPrefix(prefix, triple.getObject()))
+								&& getFullPrefix(prefix, map.get("type")).equals(range)) {
+							pass2 = true;
+						}
+					}
+					if (!pass1 || !pass2) {
 						status = HttpStatus.BAD_REQUEST;
-						message = triple.getPredicate() + " is not conformed to the model (" + triple.getObject() + ")";
+						message = triple.getPredicate() + " is not conformed to the model (" + triple.getSubject() + " " + triple.getPredicate() + " " + triple.getObject() + ")";
 						return new ResponseEntity<String>(message, status);
 					}
 				}
@@ -760,30 +880,47 @@ public class APIController {
 				return new ResponseEntity<FileSystemResource>(file, status);
 			}
 			
-			if (level != null && !level.equals("model") && !level.equals("namespace")) {
+			String query = initPrefix(prefix) + "CONSTRUCT {?subject ?predicate ?object} WHERE {";
+			if (level == null) {
+				query += "{GRAPH <" + repo_name + "/metamodel> {?subject ?predicate ?object} . ";
+				if (namespace != null) {
+					query += "FILTER(STRSTARTS(STR(?subject),str(" + namespace + ":)))";
+				}
+				query += "}";
+				query += "union {GRAPH <" + repo_name + "/model> {?subject ?predicate ?object} . ";
+				if (namespace != null) {
+					query += "FILTER(STRSTARTS(STR(?subject),str(" + namespace + ":)))";
+				}
+				query += "}";
+				query += "union {GRAPH <" + repo_name + "/instance> {?subject ?predicate ?object} . ";
+				if (namespace != null) {
+					query += "FILTER(STRSTARTS(STR(?subject),str(" + namespace + ":)))";
+				}
+				query += "}}";
+			} else if (level.equals("metamodel")) {
+				query += "{GRAPH <" + repo_name + "/metamodel> {?subject ?predicate ?object} . ";
+				if (namespace != null) {
+					query += "FILTER(STRSTARTS(STR(?subject),str(" + namespace + ":)))";
+				}
+				query += "}}";
+			} else if (level.equals("model")) {
+				query += "{GRAPH <" + repo_name + "/model> {?subject ?predicate ?object} . ";
+				if (namespace != null) {
+					query += "FILTER(STRSTARTS(STR(?subject),str(" + namespace + ":)))";
+				}
+				query += "}}";
+			} else if (level.equals("instance")) {
+				query += "{GRAPH <" + repo_name + "/instance> {?subject ?predicate ?object} . ";
+				if (namespace != null) {
+					query += "FILTER(STRSTARTS(STR(?subject),str(" + namespace + ":)))";
+				}
+				query += "}}";
+			} else {
 				status = HttpStatus.BAD_REQUEST;
 				return new ResponseEntity<FileSystemResource>(file, status);
 			}
 			
-			
-			String q = initPrefix(prefix) + "CONSTRUCT {?subject ?predicate ?object} WHERE {"
-					+ "{GRAPH <" + repo_name + "/model> {?subject ?predicate ?object} . ";
-			if (level != null && level.equals("namespace") && namespace != null) {
-				//q += "FILTER(STRSTARTS(STR(?subject), '" + namespace + "'))";
-				q += "FILTER(STRSTARTS(STR(?subject),str(" + namespace + ":)))";
-			} 
-				q += "}";
-			if (level == null || level.equals("namespace")) {
-				q += "union {GRAPH <" + repo_name + "/instance> {?subject ?predicate ?object} . ";
-				if (level != null && level.equals("namespace") && namespace != null) {
-					//q += "FILTER(STRSTARTS(STR(?subject), '" + namespace + "'))";
-					q += "FILTER(STRSTARTS(STR(?subject),str(" + namespace + ":)))";
-				} 
-					q += "}";
-			}
-			q += "}";
-			
-			log(q);
+			log(query);
 			
 			String extension = "";
 			String syntax = "";
@@ -810,7 +947,7 @@ public class APIController {
 			File f = File.createTempFile("tmp", "." + extension);
 			FileWriter fw = new FileWriter(f.getAbsoluteFile());
 			HttpAuthenticator authenticator = new SimpleAuthenticator("dba", "dba".toCharArray());
-			Model result = QueryExecutionFactory.sparqlService("http://localhost:8890/sparql-auth", q, authenticator).execConstruct();
+			Model result = QueryExecutionFactory.sparqlService("http://localhost:8890/sparql-auth", query, authenticator).execConstruct();
 			
 			JSONArray preAr = new JSONArray(prefix);
 			for (int i = 0; i < preAr.length(); i++) {
@@ -947,7 +1084,7 @@ public class APIController {
 			}
 			
 			String query = "SPARQL " + initPrefix(prefix)
-					+ "SELECT ?instance ?type from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
+					+ "SELECT ?instance ?type from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
 						+ "?type rdfs:subClassOf* " + type + " . "
 						+ "?instance a ?type"
 					+ "}";
@@ -1011,7 +1148,7 @@ public class APIController {
 			}
 			
 			String query = "SPARQL " + initPrefix(prefix)
-					+ "SELECT ?class ?type from <" + repo_name + "/model> WHERE { "
+					+ "SELECT ?class ?type from <" + repo_name + "/metamodel> from <" + repo_name + "/model> WHERE { "
 						+ "?class rdfs:subClassOf* " + type + " . "
 						+ "?class rdfs:subClassOf ?type"
 					+ "}";
@@ -1049,7 +1186,7 @@ public class APIController {
 	@RequestMapping("/types/{type}/properties")
 	@ResponseBody
 	public HttpEntity<List<Map<String, String>>> typeProperties(@RequestHeader("Authorization") String Authorization, @RequestParam String repo_name, @PathVariable String type, String prefix) {
-		return instanceProperties(Authorization, repo_name, type, "model", prefix);
+		return instanceProperties(Authorization, repo_name, type, prefix);
 	}
 	
 	@RequestMapping("/instances/{instance}/model_properties")
@@ -1080,7 +1217,7 @@ public class APIController {
 			}
 			
 			String query = "SPARQL " + initPrefix(prefix)
-						+ "SELECT distinct ?predicate from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
+						+ "SELECT distinct ?predicate from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
 						   	+ instance + " rdf:type ?model ."
 							+ "?model rdfs:subClassOf* ?superModel . "
 							+ "?predicate rdfs:domain ?superModel ."
@@ -1118,7 +1255,7 @@ public class APIController {
 	
 	@RequestMapping("/instances/{instance}/properties")
 	@ResponseBody
-	public HttpEntity<List<Map<String, String>>> instanceProperties(@RequestHeader("Authorization") String Authorization, @RequestParam String repo_name, @PathVariable String instance, String level, String prefix) {
+	public HttpEntity<List<Map<String, String>>> instanceProperties(@RequestHeader("Authorization") String Authorization, @RequestParam String repo_name, @PathVariable String instance, String prefix) {
 		HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
 		TripleStoreConnector gettingStartedApplication = null;
 		UserManager manager = null;
@@ -1144,21 +1281,17 @@ public class APIController {
 			}
 			
 			String query = "";
-			if (level.equals("model") || level.equals("instance")) {
-				query = "SPARQL " + initPrefix(prefix)
-						+ "SELECT ?predicate ?object ?name ?type (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
-							+ instance +" ?predicate ?object ."
-							/*+ "OPTIONAL {"
-								+ "?object a ?type ."
-								+ "}"*/
-							+ "OPTIONAL { "
-								+ "?object rdfs:label ?name ."
-							+ "}"
-						+ "}";
-			} else {
-				status = HttpStatus.BAD_REQUEST;
-				return new ResponseEntity<List<Map<String, String>>>(tuples, status);
-			}
+			query = "SPARQL " + initPrefix(prefix)
+					+ "SELECT ?predicate ?object ?name ?type (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype "
+					+ "from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
+						+ instance +" ?predicate ?object ."
+						/*+ "OPTIONAL {"
+							+ "?object a ?type ."
+							+ "}"*/
+						+ "OPTIONAL { "
+							+ "?object rdfs:label ?name ."
+						+ "}"
+					+ "}";
 			
 			log(query);
 			
@@ -1218,7 +1351,8 @@ public class APIController {
 			}
 			
 			String query = "SPARQL " + initPrefix(prefix)
-					+ "SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
+					+ "SELECT ?subject ?predicate ?object (iri(sql:RDF_DATATYPE_OF_OBJ(?object, 'untyped!'))) as ?datatype "
+					+ "from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE {"
 						+ instance +" ?predicate1 ?subject . "
 						+ "?subject ?predicate ?object"
 					+ "}";
@@ -1473,7 +1607,7 @@ public class APIController {
 				}
 			} else {
 				status = HttpStatus.BAD_REQUEST;
-				message = "Level parameter can be only model or instance";
+				message = "Level parameter can be only metamodel, model or instance";
 				return new ResponseEntity<String>(message, status);
 			}
 			
@@ -1693,13 +1827,13 @@ public class APIController {
 			
 			String graph = "";
 			if (level == null) {
-				graph = "from <" + repo_name + "/model>" + " from <" + repo_name + "/instance>";
-			} else if (level.equals("model") || level.equals("instance")) {
+				graph = "from <" + repo_name + "/metamodel> from <" + repo_name + "/model>" + " from <" + repo_name + "/instance>";
+			} else if (level.equals("metamodel") || level.equals("model") || level.equals("instance")) {
 				graph = "from <" + repo_name + "/" + level + ">";
 			} else {
 				status = HttpStatus.BAD_REQUEST;
 				Map<String, String> map = new HashMap<String, String>();
-				map.put("message", "Level parameter can be only model or instance");
+				map.put("message", "Level parameter can be only metamodel, model or instance");
 				triples.add(map);
 				return new ResponseEntity<List<Map<String, String>>>(triples, status);
 			}

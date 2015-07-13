@@ -264,6 +264,7 @@ public class UserController {
 			if (!arole.equals(Role.superAdmin)) {
 				status = HttpStatus.FORBIDDEN;
 			} else {
+				manager.createGraph(repo_name + "/metamodel");
 				manager.createGraph(repo_name + "/model");
 				manager.createGraph(repo_name + "/instance");
 				status = HttpStatus.OK;
@@ -301,6 +302,11 @@ public class UserController {
 			if (!arole.equals(Role.superAdmin)) {
 				status = HttpStatus.FORBIDDEN;
 			} else {
+				if (permission != 0) {
+					manager.setRdfGraphPermissions(manager.getUsernameFromID(userid), repo_name + "/metamodel", 1);
+				} else {
+					manager.setRdfGraphPermissions(manager.getUsernameFromID(userid), repo_name + "/metamodel", 0);
+				}
 				if (permission == 2) {
 					manager.setRdfGraphPermissions(manager.getUsernameFromID(userid), repo_name + "/model", 1);
 					manager.setRdfGraphPermissions(manager.getUsernameFromID(userid), repo_name + "/instance", 3);
@@ -347,6 +353,7 @@ public class UserController {
 			if (arole != Role.superAdmin) {
 				status = HttpStatus.FORBIDDEN;
 			} else {
+				manager.deleteGraph(repo_name + "/metamodel");
 				manager.deleteGraph(repo_name + "/model");
 				manager.deleteGraph(repo_name + "/instance");
 				status = HttpStatus.OK;
