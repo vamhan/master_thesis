@@ -411,7 +411,7 @@ public class APIController {
 			log(query);
 			
 			gettingStartedApplication.update(query);
-			//notification(triples, repo_name, level, prefix);
+			notification(triples, repo_name, level, prefix);
 			status = HttpStatus.OK;
 			message  = "Adding triples succeeds";
 			
@@ -1768,7 +1768,7 @@ public class APIController {
 	}
 	
 	
-	/*private static void notification(List<Triple> triples, final String repo_name, final String level, List<Map<String, String>> prefix) {
+	private static void notification(List<Triple> triples, final String repo_name, final String level, String prefix) {
 		String topic = repo_name.replace(":", "").replace("/", "_") + "_repository"; //+ (level.equals("namespace") ? "_" + map.get("namespace") : "");
 		Notification noti = new Notification(topic);
         noti.writeMessage("The metadata repository (" + repo_name + ", repository level) has been made changes. Please refer to the new version");
@@ -1781,27 +1781,30 @@ public class APIController {
 	        noti.close();
         } 
         
-        List<String> alN = new ArrayList<String>();
-        for (Triple triple : triples) {
-        	String namespaceS = getPrefix(prefix, triple.getSubject());
-        	String namespaceO = getPrefix(prefix, triple.getObject());
-			if (namespaceS.indexOf("<") < 0 && !alN.contains(namespaceS)) {
-				
-				topic = repo_name.replace(":", "").replace("/", "_") + "_namespace_" + namespaceS;
-				noti = new Notification(topic);
-		        noti.writeMessage("The metadata repository (" + repo_name + ", namespace " + namespaceS + " level) has been made changes. Please refer to the new version");
-		        noti.close();
-		        alN.add(namespaceS);
+        /*List<String> alN = new ArrayList<String>();
+        try {
+	        for (Triple triple : triples) {
+	        	String namespaceS = getFullPrefix(prefix, triple.getSubject());
+				String namespaceO = getFullPrefix(prefix, triple.getObject());
+				if (namespaceS.indexOf("<") < 0 && !alN.contains(namespaceS)) {
+					topic = repo_name.replace(":", "").replace("/", "_") + "_namespace_" + namespaceS;
+					noti = new Notification(topic);
+			        noti.writeMessage("The metadata repository (" + repo_name + ", namespace " + namespaceS + " level) has been made changes. Please refer to the new version");
+			        noti.close();
+			        alN.add(namespaceS);
+				}
+				if (triple.getObject().indexOf('"') < 0 && triple.getObject().indexOf('<') < 0 && !alN.contains(namespaceO)) {
+			        topic = repo_name.replace(":", "").replace("/", "_") + "_namespace_" + namespaceO;
+					noti = new Notification(topic);
+			        noti.writeMessage("The metadata repository (" + repo_name + ", namespace " + namespaceO + " level) has been made changes. Please refer to the new version");
+			        noti.close();
+			        alN.add(namespaceS);
+				}
 			}
-			if (triple.getObject().indexOf('"') < 0 && triple.getObject().indexOf('<') < 0 && !alN.contains(namespaceO)) {
-		        topic = repo_name.replace(":", "").replace("/", "_") + "_namespace_" + namespaceO;
-				noti = new Notification(topic);
-		        noti.writeMessage("The metadata repository (" + repo_name + ", namespace " + namespaceO + " level) has been made changes. Please refer to the new version");
-		        noti.close();
-		        alN.add(namespaceS);
-			}
-		}
-	}*/
+        } catch (JSONException e) {
+			e.printStackTrace();
+		}*/
+	}
 	
 	private static void sendEmail(String email, String level) {
 	      String to = email;

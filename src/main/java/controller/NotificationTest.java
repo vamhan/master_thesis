@@ -32,7 +32,7 @@ public class NotificationTest implements javax.jms.MessageListener {
 		try {
 			
 			HttpClient client = new DefaultHttpClient();
-	    	HttpPost post = new HttpPost(host + "/subscibe?repo_name=" + repo_name + "&subscribe_level=namespace&namespace=http://rdfs.org/sioc/ns#");
+	    	HttpPost post = new HttpPost(host + "/subscibe?repo_name=" + repo_name + "&subscribe_level=repository");
 			
 			String authString = "dba:dba";
 			byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
