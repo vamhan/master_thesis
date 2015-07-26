@@ -443,15 +443,22 @@ public class APIController {
 		HttpStatus status;
 		String message;
 		
+		String query = "SPARQL " + initPrefix(prefix)
+				+ "SELECT distinct ?element ?type from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
+					+ "?element a ?type ."
+				+ "}";
+		List<Map<String, String>> all = gettingStartedApplication.queryTuples(query);
+		
 		String query1 = "SPARQL " + initPrefix(prefix)
-				+ "SELECT distinct ?metamodel from <" + repo_name + "/metamodel> WHERE { "
-					+ "?metamodel ?p ?o"
+				+ "SELECT distinct ?metamodel ?super from <" + repo_name + "/metamodel> WHERE { "
+					+ "?metamodel ?p ?o ."
+					+ "?metamodel rdfs:subClassOf* ?super ."
 				+ "}";
 		List<Map<String, String>> metamodel = gettingStartedApplication.queryTuples(query1);
 		
 		String query2 = "SPARQL " + initPrefix(prefix)
 				+ "SELECT distinct ?class ?type from <" + repo_name + "/metamodel> from <" + repo_name + "/model> WHERE { "
-					+ "?class rdf:type ?subtype ."
+					+ "?class a ?subtype ."
 					+ "?subtype rdfs:subClassOf* ?type ."
 					+ "filter(?subtype != <http://www.w3.org/2000/01/rdf-schema#Class> && ?subtype != <http://www.w3.org/1999/02/22-rdf-syntax-ns#Property>)"
 				+ "}";
@@ -467,15 +474,22 @@ public class APIController {
 			
 			query2 = "SPARQL " + initPrefix(prefix)
 					+ "SELECT distinct ?predicate ?domain ?range from <" + repo_name + "/metamodel> WHERE { "
-					+ "?predicate rdf:type rdf:Property ."
 					+ "?predicate rdfs:domain ?domain ."
 					+ "?predicate rdfs:range ?range ."
 				+ "}";
 			List<Map<String, String>> predicates = gettingStartedApplication.queryTuples(query2);
 			
 			for (Triple triple : triples) {
+				
+				// the model element must not be the metamodel element
 				for (Map<String, String> map : metamodel) {
-					if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getSubject()))) {
+					if (getFullPrefix(prefix, triple.getPredicate()).equals("rdf:type") || triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) {
+						if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getSubject()))) {
+							status = HttpStatus.BAD_REQUEST;
+							message = triple.getSubject() + " is not in the model level!";
+							return new ResponseEntity<String>(message, status);
+						}
+					} else if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getSubject()))) {
 						status = HttpStatus.BAD_REQUEST;
 						message = triple.getSubject() + " is not in the model level!";
 						return new ResponseEntity<String>(message, status);
@@ -489,10 +503,9 @@ public class APIController {
 						return new ResponseEntity<String>(message, status);
 					}
 				}
+				
+				// the model element must not be the instance element
 				for (Map<String, String> map : tuples) {
-					log("///////////////////////////////////////" + getFullPrefix(prefix, map.get("instance")));
-					log("///////////////////////////////////////" + getFullPrefix(prefix, triple.getSubject()));
-					log("///////////////////////////////////////" + getFullPrefix(prefix, triple.getObject()));
 					if (getFullPrefix(prefix, map.get("instance")).equals(getFullPrefix(prefix, triple.getSubject()))) {
 						status = HttpStatus.BAD_REQUEST;
 						message = triple.getSubject() + " is not in the model level!";
@@ -504,6 +517,54 @@ public class APIController {
 					}
 				}
 				
+				// every element must has type
+				boolean hasTypeS = false;
+				boolean hasTypeO = false;
+				for (Map<String, String> map : all) {
+					if (getFullPrefix(prefix, map.get("element")).equals(getFullPrefix(prefix, triple.getSubject()))) {
+						hasTypeS = true;
+					} else if (getFullPrefix(prefix, map.get("element")).equals(getFullPrefix(prefix, triple.getObject())) ||
+							(getFullPrefix(prefix, triple.getObject()).equals("rdf:Property") || triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#Property>")) ||
+							(getFullPrefix(prefix, triple.getPredicate()).equals("rdf:type") || triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) ||
+							(getFullPrefix(prefix, triple.getPredicate()).equals("rdfs:label") || triple.getPredicate().equals("<http://www.w3.org/2000/01/rdf-schema#label>")) ||
+							(getFullPrefix(prefix, triple.getPredicate()).equals("owl:sameAs") || triple.getPredicate().equals("<http://www.w3.org/2002/07/owl#sameAs>"))) {
+						hasTypeO = true;
+					}
+				}
+				if (!hasTypeS || !hasTypeO) {
+					for (Triple triple2 : triples) {
+						if (!hasTypeS && getFullPrefix(prefix, triple2.getSubject()).equals(getFullPrefix(prefix, triple.getSubject())) 
+								&& (getFullPrefix(prefix, triple2.getPredicate()).equals("rdf:type") || triple2.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"))){
+							for (Map<String, String> map : metamodel) {
+								if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple2.getObject()))) {
+									hasTypeS = true;
+									break;
+								}
+							}
+						}
+						if (!hasTypeO && getFullPrefix(prefix, triple2.getSubject()).equals(getFullPrefix(prefix, triple.getObject())) 
+								&& (getFullPrefix(prefix, triple2.getPredicate()).equals("rdf:type") || triple2.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"))){
+							for (Map<String, String> map : metamodel) {
+								if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple2.getObject()))) {
+									hasTypeO = true;
+									break;
+								}
+							}
+						}
+					}
+				}
+				if (!hasTypeS) {
+					status = HttpStatus.BAD_REQUEST;
+					message = triple.getSubject() + " does not have type";
+					return new ResponseEntity<String>(message, status);
+				}
+				if (!hasTypeO) {
+					status = HttpStatus.BAD_REQUEST;
+					message = triple.getObject() + " does not have type";
+					return new ResponseEntity<String>(message, status);
+				}
+				
+				// domain and range of new predicate must be instances of the domain and range meta class of the meta property
 				if ((getFullPrefix(prefix, triple.getPredicate()).equals("rdf:type") || triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) 
 						&& (getFullPrefix(prefix, triple.getObject()).equals("rdf:Property") || triple.getObject().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#Property>"))) {
 					String domain = "";
@@ -532,8 +593,22 @@ public class APIController {
 								}
 							}
 							if (!pass) {
+								for (Triple triple3 : triples) {
+									if (getFullPrefix(prefix, triple3.getSubject()).equals(getFullPrefix(prefix, triple2.getObject())) 
+											&& (getFullPrefix(prefix, triple3.getPredicate()).equals("rdf:type") || triple3.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"))){
+										for (Map<String, String> map : metamodel) {
+											if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple3.getObject()))
+													&& getFullPrefix(prefix, map.get("super")).equals(domain)) {
+												pass = true;
+												break;
+											}
+										}
+									}
+								}
+							}
+							if (!pass) {
 								status = HttpStatus.BAD_REQUEST;
-								message = triple2.getPredicate() + " is not conformed to the metamodel (" + triple2.getSubject() + ")";
+								message = triple.getSubject() + " is not conformed to the metamodel (" + triple2.getObject() + ")";
 								return new ResponseEntity<String>(message, status);
 							}
 						}
@@ -548,8 +623,22 @@ public class APIController {
 								}
 							}
 							if (!pass) {
+								for (Triple triple3 : triples) {
+									if (getFullPrefix(prefix, triple3.getSubject()).equals(getFullPrefix(prefix, triple2.getObject())) 
+											&& (getFullPrefix(prefix, triple3.getPredicate()).equals("rdf:type") || triple3.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"))){
+										for (Map<String, String> map : metamodel) {
+											if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple3.getObject()))
+													&& getFullPrefix(prefix, map.get("super")).equals(range)) {
+												pass = true;
+												break;
+											}
+										}
+									}
+								}
+							}
+							if (!pass) {
 								status = HttpStatus.BAD_REQUEST;
-								message = triple2.getPredicate() + " is not conformed to the metamodel (" + triple2.getObject() + ")";
+								message = triple.getSubject() + " is not conformed to the metamodel (" + triple2.getObject() + ")";
 								return new ResponseEntity<String>(message, status);
 							}
 						}
@@ -574,29 +663,27 @@ public class APIController {
 			List<Map<String, String>> predicates = gettingStartedApplication.queryTuples(query3);
 			
 			for (Triple triple : triples) {
+				
+				// the instance element must not be the metamodel element
 				for (Map<String, String> map : metamodel) {
 					if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getSubject()))) {
 						status = HttpStatus.BAD_REQUEST;
-						message = triple.getSubject() + " is not in the model level!";
+						message = triple.getSubject() + " is not in the instance level!";
 						return new ResponseEntity<String>(message, status);
 					} else if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getObject()))) {
 						status = HttpStatus.BAD_REQUEST;
-						message = triple.getObject() + " is not in the model level!";
+						message = triple.getObject() + " is not in the instance level!";
 						return new ResponseEntity<String>(message, status);
 					} else if (getFullPrefix(prefix, map.get("metamodel")).equals(getFullPrefix(prefix, triple.getPredicate()))) {
 						status = HttpStatus.BAD_REQUEST;
-						message = triple.getPredicate() + " is not in the model level!";
+						message = triple.getPredicate() + " is not in the instance level!";
 						return new ResponseEntity<String>(message, status);
 					}
 				}
 				
+				// the instance element must not be the model element
 				for (Map<String, String> map : model) {
-					log("instance///////////////////////////////////////" + getFullPrefix(prefix, map.get("class")));
-					log("instance///////////////////////////////////////" + getFullPrefix(prefix, triple.getSubject()));
-					log("instance///////////////////////////////////////" + getFullPrefix(prefix, triple.getObject()));
-					log(getFullPrefix(prefix, triple.getPredicate()));
 					if (getFullPrefix(prefix, triple.getPredicate()).equals("rdf:type") || triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")) {
-						log("instance///////////////////////////////////////type");
 						if (getFullPrefix(prefix, map.get("class")).equals(getFullPrefix(prefix, triple.getSubject()))) {
 							status = HttpStatus.BAD_REQUEST;
 							message = triple.getSubject() + " is not in the instance level!";
@@ -612,30 +699,101 @@ public class APIController {
 						return new ResponseEntity<String>(message, status);
 					}
 				}
+				
+				// every element must has type
+				boolean hasTypeS = false;
+				boolean hasTypeO = false;
+				for (Map<String, String> map : all) {
+					if (getFullPrefix(prefix, map.get("element")).equals(getFullPrefix(prefix, triple.getSubject()))) {
+						hasTypeS = true;
+					} else if (getFullPrefix(prefix, map.get("element")).equals(getFullPrefix(prefix, triple.getObject())) || triple.getObject().indexOf('"') >= 0 ||
+							(getFullPrefix(prefix, triple.getPredicate()).equals("owl:sameAs") || triple.getPredicate().equals("<http://www.w3.org/2002/07/owl#sameAs>"))) {
+						hasTypeO = true;
+					}
+				}
+				if (!hasTypeS || !hasTypeO) {
+					for (Triple triple2 : triples) {
+						if (!hasTypeS && getFullPrefix(prefix, triple2.getSubject()).equals(getFullPrefix(prefix, triple.getSubject())) 
+								&& (getFullPrefix(prefix, triple2.getPredicate()).equals("rdf:type") || triple2.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"))){
+							for (Map<String, String> map : model) {
+								if (getFullPrefix(prefix, map.get("class")).equals(getFullPrefix(prefix, triple2.getObject()))) {
+									hasTypeS = true;
+									break;
+								}
+							}
+						}
+						if (!hasTypeO && getFullPrefix(prefix, triple2.getSubject()).equals(getFullPrefix(prefix, triple.getObject())) 
+								&& (getFullPrefix(prefix, triple2.getPredicate()).equals("rdf:type") || triple2.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"))){
+							for (Map<String, String> map : model) {
+								if (getFullPrefix(prefix, map.get("class")).equals(getFullPrefix(prefix, triple2.getObject()))) {
+									hasTypeO = true;
+									break;
+								}
+							}
+						}
+					}
+				}
+				if (!hasTypeS) {
+					status = HttpStatus.BAD_REQUEST;
+					message = triple.getSubject() + " does not have type";
+					return new ResponseEntity<String>(message, status);
+				}
+				if (!hasTypeO) {
+					status = HttpStatus.BAD_REQUEST;
+					message = triple.getObject() + " does not have type";
+					return new ResponseEntity<String>(message, status);
+				}
 			
 				// check domain and range
 				if (!notCheckValid 
 						&& !getFullPrefix(prefix, triple.getPredicate()).equals("rdf:type") && !triple.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>") 
 						&& !getFullPrefix(prefix, triple.getPredicate()).equals("rdfs:label") && !triple.getPredicate().equals("<http://www.w3.org/2000/01/rdf-schema#label>") 
+						&& !getFullPrefix(prefix, triple.getPredicate()).equals("owl:sameAs") && !triple.getPredicate().equals("<http://www.w3.org/2002/07/owl#sameAs>")
 						&& triple.getObject().indexOf('"') < 0) {
 
 					boolean pass1 = false;
 					boolean pass2 = false;
-					String domain = "";
-					String range = "";
-					for (Map<String, String> map : predicates) {
-						if (getFullPrefix(prefix, map.get("predicate")).equals(getFullPrefix(prefix, triple.getPredicate()))) {
-							domain = getFullPrefix(prefix, map.get("domain"));
-							range = getFullPrefix(prefix, map.get("range"));
+					for (Map<String, String> map : instances) {
+						for (Map<String, String> pre : predicates) {
+							if (getFullPrefix(prefix, map.get("instance")).equals(getFullPrefix(prefix, triple.getSubject()))
+									&& getFullPrefix(prefix, pre.get("predicate")).equals(getFullPrefix(prefix, triple.getPredicate()))
+									&& getFullPrefix(prefix, map.get("type")).equals(getFullPrefix(prefix, pre.get("domain")))) {
+								pass1 = true;
+							} else if (getFullPrefix(prefix, map.get("instance")).equals(getFullPrefix(prefix, triple.getObject()))
+									&& getFullPrefix(prefix, pre.get("predicate")).equals(getFullPrefix(prefix, triple.getPredicate()))
+									&& getFullPrefix(prefix, map.get("type")).equals(getFullPrefix(prefix, pre.get("range")))) {
+								pass2 = true;
+							}
 						}
 					}
-					for (Map<String, String> map : instances) {
-						if (getFullPrefix(prefix, map.get("instance")).equals(getFullPrefix(prefix, triple.getSubject()))
-								&& getFullPrefix(prefix, map.get("type")).equals(domain)) {
-							pass1 = true;
-						} else if (getFullPrefix(prefix, map.get("instance")).equals(getFullPrefix(prefix, triple.getObject()))
-								&& getFullPrefix(prefix, map.get("type")).equals(range)) {
-							pass2 = true;
+					if (!pass1 || !pass2) {
+						for (Triple triple2 : triples) {
+							if (!pass1 && getFullPrefix(prefix, triple2.getSubject()).equals(getFullPrefix(prefix, triple.getSubject())) 
+									&& (getFullPrefix(prefix, triple2.getPredicate()).equals("rdf:type") || triple2.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"))){
+								for (Map<String, String> map : model) {
+									for (Map<String, String> pre : predicates) {
+										if (getFullPrefix(prefix, map.get("class")).equals(getFullPrefix(prefix, triple2.getObject()))
+												&& getFullPrefix(prefix, pre.get("predicate")).equals(getFullPrefix(prefix, triple.getPredicate()))
+												&& getFullPrefix(prefix, map.get("class")).equals(getFullPrefix(prefix, pre.get("domain")))) {
+											pass1 = true;
+											break;
+										}
+									}
+								}
+							}
+							if (!pass2 && getFullPrefix(prefix, triple2.getSubject()).equals(getFullPrefix(prefix, triple.getObject())) 
+									&& (getFullPrefix(prefix, triple2.getPredicate()).equals("rdf:type") || triple2.getPredicate().equals("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"))){
+								for (Map<String, String> map : model) {
+									for (Map<String, String> pre : predicates) {
+										if (getFullPrefix(prefix, map.get("class")).equals(getFullPrefix(prefix, triple2.getObject()))
+												&& getFullPrefix(prefix, pre.get("predicate")).equals(getFullPrefix(prefix, triple.getPredicate()))
+												&& getFullPrefix(prefix, map.get("class")).equals(getFullPrefix(prefix, pre.get("range")))) {
+											pass2 = true;
+											break;
+										}
+									}
+								}
+							}
 						}
 					}
 					if (!pass1 || !pass2) {
@@ -786,16 +944,17 @@ public class APIController {
 			FileOutputStream fos = new FileOutputStream(f); 
 		    fos.write(file.getBytes());
 		    fos.close(); 
-			/*Model model = RDFDataMgr.loadModel(f.getAbsolutePath());
+			Model model = RDFDataMgr.loadModel(f.getAbsolutePath());
 			Set<String> ns = model.getNsPrefixMap().keySet();
 			String prefixS = "[";
 			for (String key : ns) {
-				prefixS += "{\"prefix\": \"" + key + "\", \"url\": \""+ model.getNsPrefixMap().get(key) +"\"";
+				prefixS += "{\"prefix\": \"" + key + "\", \"url\": \""+ model.getNsPrefixMap().get(key) +"\"},";
 			}
 			prefixS += "]";
 			log(prefixS);
 			
-			/*StmtIterator stmtIter = model.listStatements();
+			StmtIterator stmtIter = model.listStatements();
+			List<Triple> triples = new ArrayList<Triple>();
 			while ( stmtIter.hasNext() ) {
 				Statement stmt = stmtIter.nextStatement();
 		        Triple triple = new Triple();
@@ -811,12 +970,12 @@ public class APIController {
 	    		} else {
 	    			triple.setObject("<" + stmt.getObject().asNode().getURI() + ">");
 	    		}
-		        
-		        HttpEntity<String> result = checkValid(level, prefixS, repo_name, gettingStartedApplication, triple, false);
-				if (result != null) {
-					return result;
-				}
-		    }*/
+		        triples.add(triple);
+		    }
+			HttpEntity<String> result = checkValid(level, prefixS, repo_name, gettingStartedApplication, triples, false);
+			if (result != null) {
+				return result;
+			}
 			
 			String query;
 			if (extension.equals("ttl") || extension.equals("nt") || extension.equals("n3")) {
@@ -845,6 +1004,8 @@ public class APIController {
 		} catch (IOException e) {
 			status = HttpStatus.BAD_REQUEST;
 			message = "There is something wrong with the imported file!";
+			e.printStackTrace();
+		} catch (JSONException e) {
 			e.printStackTrace();
 		} finally {
 			if (gettingStartedApplication != null)
@@ -1220,8 +1381,8 @@ public class APIController {
 						+ "SELECT distinct ?predicate from <" + repo_name + "/metamodel> from <" + repo_name + "/model> from <" + repo_name + "/instance> WHERE { "
 						   	+ instance + " rdf:type ?model ."
 							+ "?model rdfs:subClassOf* ?superModel . "
-							+ "?predicate rdfs:domain ?superModel ."
-						+ "}";
+							+ "?predicate rdfs:domain ?superModel "
+							+ "}";
 			
 			log(query);
 			
@@ -1915,11 +2076,11 @@ public class APIController {
 	        noti.close();
         } 
         
-        /*List<String> alN = new ArrayList<String>();
+        List<String> alN = new ArrayList<String>();
         try {
 	        for (Triple triple : triples) {
-	        	String namespaceS = getFullPrefix(prefix, triple.getSubject());
-				String namespaceO = getFullPrefix(prefix, triple.getObject());
+	        	String namespaceS = getPrefix(prefix, triple.getSubject());
+				String namespaceO = getPrefix(prefix, triple.getObject());
 				if (namespaceS.indexOf("<") < 0 && !alN.contains(namespaceS)) {
 					topic = repo_name.replace(":", "").replace("/", "_") + "_namespace_" + namespaceS;
 					noti = new Notification(topic);
@@ -1937,7 +2098,7 @@ public class APIController {
 			}
         } catch (JSONException e) {
 			e.printStackTrace();
-		}*/
+		}
 	}
 	
 	private static void sendEmail(String email, String level) {
@@ -2056,11 +2217,30 @@ public class APIController {
 				JSONObject p = prefixAr.getJSONObject(i);
 				int position = url.indexOf(p.getString("url"));
 				if (position >= 0) {
-					return p.getString("prefix") + ":" + url.substring(position + p.getString("url").length()); 
+					return url.substring(0, position) + p.getString("prefix") + ":" + url.substring(position + p.getString("url").length()); 
 				}
 			}
 		}
 		return url;
+	}
+	
+	private static String getPrefix(String defaultPrefix, String url) throws JSONException {
+		if (defaultPrefix != null && url != null) {
+			JSONArray prefixAr = new JSONArray(defaultPrefix);
+			url = url.replace("<", "").replace(">", "");
+			for (int i = 0; i < prefixAr.length(); i++) {
+				JSONObject p = prefixAr.getJSONObject(i);
+				int position = url.indexOf(p.getString("url"));
+				if (position >= 0) {
+					return p.getString("prefix"); 
+				}
+			}
+		}
+		if (url.indexOf("<") >= 0 || url.indexOf('"') >= 0) {
+			return null;
+		} else {
+			return url.substring(0, url.indexOf(":"));
+		}
 	}
 	
 	private static String getUrl(String defaultPrefix, String prefixS) throws JSONException {
@@ -2137,16 +2317,10 @@ public class APIController {
         return out;
     }
 	
-	public static void main(String[] args) throws JSONException {
+	public static void main(String[] args) throws JSONException, UnauthorizedException {
 		
 		APIController con = new APIController();
-		List<Triple> list = new ArrayList<Triple>();
-		Triple triple = new Triple();
-		triple.setSubject("dm:iris");
-		triple.setPredicate("dm:hasFeature");
-		triple.setObject("dm:dirty_iris");
-		list.add(triple);
-		
+		TripleStoreConnector gettingStartedApplication = new TripleStoreConnector(TripleStoreConnector.initiateParameters(null).getParameters(), dba_username, dba_password);
 		String prefix = "[{ \"prefix\": \"rdfs\", \"url\": \"http://www.w3.org/2000/01/rdf-schema#\"},"
 				  + "{ \"prefix\": \"rdf\", \"url\": \"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"},"
 				  + "{ \"prefix\": \"ns\", \"url\": \"http://rdfs.org/sioc/ns#\"},"
@@ -2154,17 +2328,28 @@ public class APIController {
 				  + "{ \"prefix\": \"type\", \"url\": \"http://rdfs.org/sioc/types#\"},"
 				  + "{ \"prefix\": \"xsd\", \"url\": \"http://www.w3.org/2001/XMLSchema#\"},"
 				  + "{ \"prefix\": \"owl\", \"url\": \"http://www.w3.org/2002/07/owl#\"},"
+				  + "{ \"prefix\": \"ex\", \"url\": \"http://www.example.org/\"},"
 				  + "{ \"prefix\": \"dbpedia-owl\", \"url\": \"http://dbpedia.org/ontology/\"},"
 				  + "{ \"prefix\": \"dbpprop\", \"url\": \"http://dbpedia.org/property/\"},"
 				  + "{ \"prefix\": \"dbres\", \"url\": \"http://dbpedia.org/resource/\"}]";
 		
-		System.out.println(getFullPrefix(prefix, "<http://rdfs.org/sioc/ns#noon>"));
+		System.out.println(getPrefix(prefix, "<http://rdfs.org/sioc/ns#noon>"));
+		System.out.println(getPrefix(prefix, "<http://dbpedia.org/ontology/Capital>"));
+		System.out.println(getPrefix(prefix, "http://dbpedia.org/ontology/Capital"));
+		System.out.println(getPrefix(prefix, "<http://dbpedia.org/resource/Capital>"));
+		System.out.println(getPrefix(prefix, "ns:DataSet"));
+		System.out.println(getPrefix(prefix, "db:DataSet"));
+		System.out.println(getPrefix(prefix, "\"abc\""));
+		System.out.println(getPrefix(prefix, "\"0\"^^<http://www.example.org/NumberOfMissingValues>"));
+		
+		/*System.out.println(getFullPrefix(prefix, "<http://rdfs.org/sioc/ns#noon>"));
 		System.out.println(getFullPrefix(prefix, "<http://dbpedia.org/ontology/Capital>"));
 		System.out.println(getFullPrefix(prefix, "http://dbpedia.org/ontology/Capital"));
 		System.out.println(getFullPrefix(prefix, "<http://dbpedia.org/resource/Capital>"));
 		System.out.println(getFullPrefix(prefix, "ns:DataSet"));
 		System.out.println(getFullPrefix(prefix, "db:DataSet"));
 		System.out.println(getFullPrefix(prefix, "\"abc\""));
+		System.out.println(getFullPrefix(prefix, "\"0\"^^<http://www.example.org/NumberOfMissingValues>"));
 		
 		System.out.println(getUrl(prefix, "<http://rdfs.org/sioc/ns#noon>"));
 		System.out.println(getUrl(prefix, "<http://dbpedia.org/ontology/Capital>"));
@@ -2174,6 +2359,7 @@ public class APIController {
 		System.out.println(getUrl(prefix, "dbpedia-owl:DataSet"));
 		System.out.println(getUrl(prefix, "db:DataSet"));
 		System.out.println(getUrl(prefix, "\"abc\""));
+		System.out.println(getUrl(prefix, "\"0\"^^<http://www.example.org/NumberOfMissingValues>"));
 		
 		System.out.println(getFullUrl(prefix, "<http://rdfs.org/sioc/ns#noon>"));
 		System.out.println(getFullUrl(prefix, "<http://dbpedia.org/ontology/Capital>"));
@@ -2183,8 +2369,620 @@ public class APIController {
 		System.out.println(getFullUrl(prefix, "dbpedia-owl:DataSet"));
 		System.out.println(getFullUrl(prefix, "db:DataSet"));
 		System.out.println(getFullUrl(prefix, "\"abc\""));
+		System.out.println(getFullUrl(prefix, "\"0\"^^<http://www.example.org/NumberOfMissingValues>"));*/
 		
-		con.addTriples("Basic ZGJhOmRiYQ==", list, "http://localhost:8890/noon", "instance", prefix, false);
+		List<Triple> list = new ArrayList<Triple>();
+		Triple triple = new Triple();
+		triple.setSubject("dm:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:dirty_iris");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		notification(list, "http://localhost:8890/noon", "model", prefix);
+		
+		/*list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("dm:hasFeature");
+		triple.setObject("ex:dirty_iris");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("dm:Feature");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:DataSet");
+		list.add(triple);
+		
+		HttpEntity<String> res = con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error");
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("dm:DataSet");
+		triple.setPredicate("rdf:type");
+		triple.setObject("ex:dirty_iris");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:iris");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:Categorical");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:Categorical");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:DataSet");
+		list.add(triple);
+		
+		res = con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error");
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:Categorical");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("rdf:type");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:AttrValueDataTable");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:AttrValueDataTable");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:abc");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:Feature");
+		list.add(triple);
+		
+		res = con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error");
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("rdf:Property");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:hasFeature");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:domain");
+		triple.setObject("ex:AttrValueDataTable");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:range");
+		triple.setObject("ex:Categorical");
+		list.add(triple);
+		
+		res = con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error");
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("rdf:Property");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:hasFeature");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:domain");
+		triple.setObject("ex:Numerical");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:range");
+		triple.setObject("ex:Categorical");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("rdf:Property");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:hasFeature");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:domain");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:range");
+		triple.setObject("ex:Categorical");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:abc");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:Discrete");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("rdf:Property");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:hasFeature");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:domain");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:range");
+		triple.setObject("ex:Categorical");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:abc");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:DataSet");
+		list.add(triple);
+		
+		res = con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("rdf:Property");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:hasFeature");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:domain");
+		triple.setObject("ex:AttrValueDataTable");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:range");
+		triple.setObject("ex:fromSource");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("rdf:Property");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:hasFeature");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:domain");
+		triple.setObject("ex:AttrValueDataTable");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:range");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:abc");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:DataSet");
+		list.add(triple);
+		
+		log(con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("rdf:Property");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:hasFeature");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:domain");
+		triple.setObject("ex:AttrValueDataTable");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:hasCategorical");
+		triple.setPredicate("rdfs:range");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:abc");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:Discrete");
+		list.add(triple);
+		
+		res = con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:Numerical");
+		triple.setPredicate("rdfs:label");
+		triple.setObject("\"");
+		list.add(triple);
+		
+		res = con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:Numerical");
+		triple.setPredicate("owl:sameAs");
+		triple.setObject("dbpedia_owl:Plant");
+		list.add(triple);
+		
+		res = con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		
+		
+		// instance
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("dm:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:dirty_iris");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("dm:hasFeature");
+		triple.setObject("ex:dirty_iris");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("dm:Feature");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("rdf:type");
+		triple.setObject("ex:AttrValueDataTable");
+		list.add(triple);
+		
+		res = con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error");
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:AttrValueDataTable");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:iris");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:class");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:class");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:DataSet");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:class");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("rdf:type");
+		triple.setObject("ex:AttrValueDataTable");
+		list.add(triple);
+		
+		res = con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:class");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:DataSet");
+		triple.setPredicate("rdf:type");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:iris");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:iris");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:abc");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:abc");
+		triple.setPredicate("rdf:type");
+		triple.setObject("ex:Categorical");
+		list.add(triple);
+		
+		res = con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:iris");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:sepalLength");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:sepalLength");
+		triple.setPredicate("ex:hasCategorical");
+		triple.setObject("ex:class");
+		list.add(triple);
+		
+		log(con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false).getBody().toString());
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:iris");
+		triple.setPredicate("ex:hasNumMissingValue");
+		triple.setObject("\"0\"^^ex:NumberOfMissingValues");
+		list.add(triple);
+		
+		res = con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("<http://www.example.org/abc>");
+		triple.setPredicate("ex:donatedBy");
+		triple.setObject("<http://www.example.org/def>");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("<http://www.example.org/abc>");
+		triple.setPredicate("rdf:type");
+		triple.setObject("ex:DataFile");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("<http://www.example.org/def>");
+		triple.setPredicate("rdf:type");
+		triple.setObject("ex:Donor");
+		list.add(triple);
+		
+		
+		res = con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:neuralNetworkTraining");
+		triple.setPredicate("rdfs:label");
+		triple.setObject("\"");
+		list.add(triple);
+		
+		res = con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:iris");
+		triple.setPredicate("owl:sameAs");
+		triple.setObject("dbres:Iris_(plant)");
+		list.add(triple);
+		
+		res = con.checkValid("instance", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}
+		
+		list = new ArrayList<Triple>();
+		triple = new Triple();
+		triple.setSubject("ex:linkedConcept");
+		triple.setPredicate("rdf:type");
+		triple.setObject("rdf:Property");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:linkedConcept");
+		triple.setPredicate("rdf:type");
+		triple.setObject("dm:hasDomainConcept");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:linkedConcept");
+		triple.setPredicate("rdfs:domain");
+		triple.setObject("ex:AttrValueDataTable");
+		list.add(triple);
+		triple = new Triple();
+		triple.setSubject("ex:linkedConcept");
+		triple.setPredicate("rdfs:range");
+		triple.setObject("ex:Plant");
+		list.add(triple);
+		
+		res = con.checkValid("model", prefix, "http://localhost:8890/noon", gettingStartedApplication, list, false);
+		if(res == null) {
+			log("null");
+		} else {
+			log("error " + res.getBody().toString());
+		}*/
 		
 		//log(con.sparql_parser("Basic ZGJhOmRiYQ==", "http://localhost:8890/noon", "ns:age4", "ns:hasProperty", "ns:blah", "instance", "").toString());
 		
